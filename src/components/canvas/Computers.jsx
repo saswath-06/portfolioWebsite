@@ -1,5 +1,5 @@
 import React, { Suspense, useEffect, useState } from "react";
-import { Canvas } from "@react-three/fiber";
+import { Canvas, useFrame } from "@react-three/fiber";
 import { OrbitControls, Preload, useGLTF } from "@react-three/drei";
 import * as THREE from "three";
 
@@ -8,6 +8,8 @@ import CanvasLoader from "../Loader";
 const Computers = ({ isMobile }) => {
   const { scene, animations } = useGLTF("./desktop/scene.gltf");
   const [mixer] = useState(() => new THREE.AnimationMixer(scene));
+  const frustum = new THREE.Frustum();
+  const cameraMatrix = new THREE.Matrix4();
 
   useEffect(() => {
     if (animations.length) {
@@ -28,6 +30,19 @@ const Computers = ({ isMobile }) => {
       mixer.stopAllAction();
     };
   }, [animations, mixer]);
+
+  useFrame(({ camera }) => {
+    // Update the camera's projection matrix
+    cameraMatrix.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse);
+    frustum.setFromProjectionMatrix(cameraMatrix);
+
+    // Traverse the scene to toggle visibility
+    scene.traverse((child) => {
+      if (child instanceof THREE.Mesh) {
+        child.visible = frustum.intersectsObject(child);
+      }
+    });
+  });
 
   return (
     <group position={[0, -3, 0]} rotation={[0, 0.5, 0]}>

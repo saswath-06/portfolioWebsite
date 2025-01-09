@@ -29,7 +29,6 @@ const Tech = () => {
         ))}
       </div>
 
-      {/* Add 'interact with us' text below and closer to the balls */}
       <div className="w-full flex justify-center mt-8 font-semibold">
         <p className="text-gray-400 text-sm">Interact with us!</p>
       </div>
