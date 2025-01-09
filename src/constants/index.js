@@ -19,13 +19,18 @@ import {
     bramptonLogo,
     enlightenLogo,
     kumonLogo,
-    carrent,
-    jobit,
-    tripguide,
+    portfolio,
+    spacecraft,
+    robot,
+    crisis,
     kicad,
   } from "../assets";
   
   export const navLinks = [
+    {
+      id: "home",
+      title: "Home",
+    },
     {
       id: "about",
       title: "About",
@@ -200,67 +205,92 @@ import {
   
   const projects = [
     {
-      name: "Car Rent",
+      name: "Personal Portfolio",
       description:
-        "Web-based platform that allows users to search, book, and manage car rentals from various providers, providing a convenient and efficient solution for transportation needs.",
+        "My personal portfolio website.",
       tags: [
         {
           name: "react",
           color: "blue-text-gradient",
         },
         {
-          name: "mongodb",
+          name: "three.js",
           color: "green-text-gradient",
+        },
+        {
+          name: "node.js",
+          color: "pink-text-gradient",
         },
         {
           name: "tailwind",
-          color: "pink-text-gradient",
+          color: "blue-text-gradient",
         },
       ],
-      image: carrent,
-      source_code_link: "https://github.com/",
+      image: portfolio,
+      source_code_link: "https://github.com/saswath-06/portfolioWebsite",
     },
     {
-      name: "Job IT",
+      name: "Crisis Compass",
       description:
-        "Web application that enables users to search for job openings, view estimated salary ranges for positions, and locate available jobs based on their current location.",
+        "Web application that analyzes natural disaster data from an API from a company called ReliefWeb. The website ranks the data based on severity and displays it for a first responder to better respond to more urgent crises. The website also has the ability to webscrape given a URL and give a severity value to the crisis described in the website.",
       tags: [
         {
           name: "react",
           color: "blue-text-gradient",
         },
         {
-          name: "restapi",
+          name: "flask",
           color: "green-text-gradient",
         },
         {
-          name: "scss",
+          name: "javascript",
           color: "pink-text-gradient",
         },
-      ],
-      image: jobit,
-      source_code_link: "https://github.com/",
-    },
-    {
-      name: "Trip Guide",
-      description:
-        "A comprehensive travel booking platform that allows users to book flights, hotels, and rental cars, and offers curated recommendations for popular destinations.",
-      tags: [
         {
-          name: "nextjs",
+          name: "html",
           color: "blue-text-gradient",
         },
         {
-          name: "supabase",
+          name: "css",
           color: "green-text-gradient",
         },
+      ],
+      image: crisis,
+      source_code_link: "https://github.com/saswath-06/Crisis-Compass/tree/main",
+    },
+    {
+      name: "Colourific",
+      description:
+        "Robot that sorts objects based on colour using a multi-sensor system.",
+      tags: [
         {
-          name: "css",
-          color: "pink-text-gradient",
+          name: "robotc",
+          color: "blue-text-gradient",
+        },
+        {
+          name: "c++",
+          color: "green-text-gradient",
         },
       ],
-      image: tripguide,
-      source_code_link: "https://github.com/",
+      image: robot,
+      source_code_link: "https://github.com/saswath-06/mechatronics-robot-c-class-project-1A",
+    },
+    {
+      name: "Spacecraft Override",
+      description:
+        "Retro RPG game using Game Maker Studio 2 and GML (Game Maker Language). All sprites were made using blender.",
+      tags: [
+        {
+          name: "GML",
+          color: "blue-text-gradient",
+        },
+        {
+          name: "blender",
+          color: "green-text-gradient",
+        },
+      ],
+      image: spacecraft,
+      source_code_link: "https://github.com/saswath-06/SPACECRAFT_OVERRIDE",
     },
   ];
   

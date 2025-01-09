@@ -68,7 +68,7 @@ const Works = () => {
           variants={fadeIn("","", 0.1,1)}
           className="mt-3 text-secondary text-[17px] max-w-3xl leading-[30px]"
         >
-          "This is the section where the projects go, check out github etc"
+          These are just a few projects I've chosen to highlight out of many. <br></br>In the top right of each project card, there is a github button that will take you to the project repository. 
         </motion.p>
       </div>
 

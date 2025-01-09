@@ -6,6 +6,9 @@ import web from "./web.png";
 import github from "./github.png";
 import menu from "./menu.svg";
 import close from "./close.svg";
+import linkedInIcon from "./linkedin.png";
+import githubIcon from "./github2.png";
+import emailIcon from "./gmail.png";
 
 import css from "./tech/css.png";
 import autocad from "./tech/autocad.png";
@@ -26,9 +29,10 @@ import kumonLogo from "./company/kumon.jpg";
 import enlightenLogo from "./company/enlighte.jpg";
 import bramptonLogo from "./company/stem.jpg";
 
-import carrent from "./carrent.png";
-import jobit from "./jobit.png";
-import tripguide from "./tripguide.png";
+import spacecraft from "./spacecraft.png";
+import robot from "./Robot.png";
+import crisis from "./crisis.png";
+import portfolio from "./portfolio.png";
 
 export {
   logo,
@@ -37,6 +41,7 @@ export {
   mobile,
   web,
   github,
+  portfolio,
   menu,
   close,
   css,
@@ -55,8 +60,11 @@ export {
   enlightenLogo,
   kumonLogo,
   bramptonLogo,
-  carrent,
-  jobit,
-  tripguide,
+  spacecraft,
+  crisis,
+  robot,
+  emailIcon,
+  githubIcon,
+  linkedInIcon,
   kicad,
 };

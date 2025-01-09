@@ -5,6 +5,7 @@ import { styles } from '../styles';
 import { EarthCanvas } from './canvas';
 import { SectionWrapper } from '../hoc';
 import { slideIn } from '../utils/motion';
+import { linkedInIcon, githubIcon, emailIcon } from "../assets";
 
 const Contact = () => {
   const formRef = useRef();
@@ -23,7 +24,6 @@ const Contact = () => {
   const handleSubmit = (e) => {
     e.preventDefault();
 
-    // Validate form inputs
     if (!form.name.trim() || !form.email.trim() || !form.message.trim()) {
       alert('Please fill out all fields before submitting.');
       return;
@@ -67,15 +67,45 @@ const Contact = () => {
     <div className="xl:mt-12 xl:flex-row flex-col-reverse flex gap-10 overflow-hidden">
       <motion.div
         variants={slideIn('left', 'tween', 0.2, 1)}
-        className="flex-[0.75] bg-black-100 p-8 rounded-2xl"
+        className="flex-[0.75] bg-black-100 p-8 rounded-2xl relative"
       >
-        <p className={styles.sectionSubText}>Get in touch</p>
+        {/* Header Section */}
+        <div className="flex items-center justify-between">
+          <p className={styles.sectionSubText}>Get in touch</p>
+          <div className="flex gap-4">
+            <a
+              href="https://www.linkedin.com/in/saswath-yeshwanth"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              <img
+                src={linkedInIcon}
+                alt="LinkedIn"
+                className="w-8 h-8 object-contain hover:opacity-75 transition-opacity duration-300"
+              />
+            </a>
+            <a
+              href="https://github.com/saswath-06"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              <img
+                src={githubIcon}
+                alt="GitHub"
+                className="w-8 h-8 object-contain hover:opacity-75 transition-opacity duration-300"
+              />
+            </a>
+          </div>
+        </div>
         <h3 className={styles.sectionHeadText}>Contact me.</h3>
+        <p className="text-gray-300 text-md -mt-2">
+          Email: <a href="mailto:s2yeshwa@uwaterloo.ca" className="text-blue-400 hover:underline">s2yeshwa@uwaterloo.ca</a>
+        </p>
 
         <form
           ref={formRef}
           onSubmit={handleSubmit}
-          className="mt-12 flex flex-col gap-8"
+          className="mt-8 flex flex-col gap-8"
         >
           <label className="flex flex-col">
             <span className="text-white font-medium mb-4">Your Name</span>
@@ -126,7 +156,7 @@ const Contact = () => {
 
       <motion.div
         variants={slideIn('right', 'tween', 0.2, 1)}
-        className="xl:flex-1 xl:h-auto md:h-[550px] h-[350px]"
+        className="xl:flex-1 xl:h-auto md:h-[550px] h-[350px] relative"
       >
         <EarthCanvas />
       </motion.div>
