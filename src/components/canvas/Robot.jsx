@@ -57,7 +57,7 @@ const Computers = ({ isMobile }) => {
   );
 };
 
-const ComputersCanvas = () => {
+const RobotCanvas = () => {
   const [isMobile, setIsMobile] = useState(false);
 
   useEffect(() => {
@@ -93,7 +93,7 @@ const ComputersCanvas = () => {
               maxPolarAngle={Math.PI / 3}
               minPolarAngle={Math.PI / 2}
               autoRotate={true}
-              autoRotateSpeed={15}
+              autoRotateSpeed={3}
             />
 
             <Computers isMobile={isMobile} />
@@ -123,4 +123,4 @@ const ComputersCanvas = () => {
   );
 };
 
-export default ComputersCanvas;
+export default RobotCanvas;

@@ -4,7 +4,7 @@ import { OrbitControls, Preload, useGLTF, Environment } from "@react-three/drei"
 import * as THREE from "three";
 import CanvasLoader from "../Loader";
 
-const Earth = () => {
+const Planet = () => {
   const { scene, animations } = useGLTF("/zoom_in/scene.gltf");
   const mixer = useRef(null);
 
@@ -35,7 +35,7 @@ const Earth = () => {
   );
 };
 
-const EarthCanvas = () => {
+const MetalPlanetCanvas = () => {
   return (
     <Canvas
       shadows
@@ -62,11 +62,11 @@ const EarthCanvas = () => {
           maxPolarAngle={Math.PI / 2}
           minPolarAngle={Math.PI / 2}
         />
-        <Earth />
+        <Planet />
         <Preload all />
       </Suspense>
     </Canvas>
   );
 };
 
-export default EarthCanvas;
+export default MetalPlanetCanvas;

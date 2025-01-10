@@ -1,6 +1,6 @@
 import { motion } from "framer-motion";
 import { styles } from "../styles";
-import { ComputersCanvas } from "./canvas";
+import { RobotCanvas } from "./canvas";
 import { SectionWrapper } from "../hoc";
 
 const Hero = () => {
@@ -24,7 +24,7 @@ const Hero = () => {
       </div>
 
       {/* ComputersCanvas for the 3D Robot */}
-      <ComputersCanvas />
+      <RobotCanvas />
     </section>
   );
 };
