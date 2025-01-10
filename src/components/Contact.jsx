@@ -5,7 +5,7 @@ import { styles } from '../styles';
 import { MetalPlanetCanvas } from './canvas';
 import { SectionWrapper } from '../hoc';
 import { slideIn } from '../utils/motion';
-import { linkedInIcon, githubIcon, emailIcon } from "../assets";
+import { linkedInIcon, githubIcon } from '../assets';
 
 const Contact = () => {
   const formRef = useRef();
@@ -64,102 +64,118 @@ const Contact = () => {
   };
 
   return (
-    <div className="xl:mt-12 xl:flex-row flex-col-reverse flex gap-10 overflow-hidden">
-      <motion.div
-        variants={slideIn('left', 'tween', 0.2, 1)}
-        className="flex-[0.75] bg-black-100 p-8 rounded-2xl relative"
-      >
-        {/* Header Section */}
-        <div className="flex items-center justify-between">
-          <p className={styles.sectionSubText}>Get in touch</p>
-          <div className="flex gap-4">
-            <a
-              href="https://www.linkedin.com/in/saswath-yeshwanth"
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              <img
-                src={linkedInIcon}
-                alt="LinkedIn"
-                className="w-8 h-8 object-contain hover:opacity-75 transition-opacity duration-300"
-              />
-            </a>
-            <a
-              href="https://github.com/saswath-06"
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              <img
-                src={githubIcon}
-                alt="GitHub"
-                className="w-8 h-8 object-contain hover:opacity-75 transition-opacity duration-300"
-              />
-            </a>
-          </div>
-        </div>
-        <h3 className={styles.sectionHeadText}>Contact me.</h3>
-        <p className="text-gray-300 text-md -mt-2">
-          Email: <a href="mailto:s2yeshwa@uwaterloo.ca" className="text-blue-400 hover:underline">s2yeshwa@uwaterloo.ca</a>
-        </p>
-
-        <form
-          ref={formRef}
-          onSubmit={handleSubmit}
-          className="mt-8 flex flex-col gap-8"
+    <div className="flex flex-col min-h-screen relative">
+      {/* Main Content Section */}
+      <div className="flex flex-col-reverse xl:flex-row flex-grow gap-10 overflow-hidden">
+        <motion.div
+          variants={slideIn('left', 'tween', 0.2, 1)}
+          className="flex-[0.75] bg-black-100 p-8 rounded-2xl"
         >
-          <label className="flex flex-col">
-            <span className="text-white font-medium mb-4">Your Name</span>
-            <input
-              type="text"
-              name="name"
-              value={form.name}
-              onChange={handleChange}
-              placeholder="Name"
-              className="bg-tertiary py-4 px-6 placeholder:text-secondary text-white rounded-lg outline-none border-none font-medium"
-            />
-          </label>
-          <label className="flex flex-col">
-            <span className="text-white font-medium mb-4">Your Email</span>
-            <input
-              type="email"
-              name="email"
-              value={form.email}
-              onChange={handleChange}
-              placeholder="Email"
-              className="bg-tertiary py-4 px-6 placeholder:text-secondary text-white rounded-lg outline-none border-none font-medium"
-            />
-          </label>
-          <label className="flex flex-col">
-            <span className="text-white font-medium mb-4">Your Message</span>
-            <textarea
-              rows="7"
-              name="message"
-              value={form.message}
-              onChange={handleChange}
-              placeholder="Subject"
-              className="bg-tertiary py-4 px-6 placeholder:text-secondary text-white rounded-lg outline-none border-none font-medium"
-            />
-          </label>
+          {/* Header Section */}
+          <div className="flex items-center justify-between">
+            <p className={styles.sectionSubText}>Get in touch</p>
+            <div className="flex gap-4">
+              <a
+                href="https://www.linkedin.com/in/saswath-yeshwanth"
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                <img
+                  src={linkedInIcon}
+                  alt="LinkedIn"
+                  className="w-8 h-8 object-contain hover:opacity-75 transition-opacity duration-300"
+                />
+              </a>
+              <a
+                href="https://github.com/saswath-06"
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                <img
+                  src={githubIcon}
+                  alt="GitHub"
+                  className="w-8 h-8 object-contain hover:opacity-75 transition-opacity duration-300"
+                />
+              </a>
+            </div>
+          </div>
+          <h3 className={styles.sectionHeadText}>Contact me.</h3>
+          <p className="text-gray-300 text-md -mt-2">
+            Email:{' '}
+            <a
+              href="mailto:s2yeshwa@uwaterloo.ca"
+              className="text-blue-400 hover:underline"
+            >
+              s2yeshwa@uwaterloo.ca
+            </a>
+          </p>
 
-          <button
-            type="submit"
-            className="bg-tertiary py-3 px-8 outline-none w-fit text-white font-bold shadow-md rounded-xl transition-all duration-300 
-                       hover:bg-purple-700
-                       hover:ring-1 hover:ring-purple-700
-                       hover:shadow-purple-600 hover:shadow-0.25g 
-                       hover:translate-y-[-2px]"
+          <form
+            ref={formRef}
+            onSubmit={handleSubmit}
+            className="mt-8 flex flex-col gap-8"
           >
-            {loading ? 'Sending...' : 'Send'}
-          </button>
-        </form>
-      </motion.div>
+            <label className="flex flex-col">
+              <span className="text-white font-medium mb-4">Your Name</span>
+              <input
+                type="text"
+                name="name"
+                value={form.name}
+                onChange={handleChange}
+                placeholder="Name"
+                className="bg-tertiary py-4 px-6 placeholder:text-secondary text-white rounded-lg outline-none border-none font-medium"
+              />
+            </label>
+            <label className="flex flex-col">
+              <span className="text-white font-medium mb-4">Your Email</span>
+              <input
+                type="email"
+                name="email"
+                value={form.email}
+                onChange={handleChange}
+                placeholder="Email"
+                className="bg-tertiary py-4 px-6 placeholder:text-secondary text-white rounded-lg outline-none border-none font-medium"
+              />
+            </label>
+            <label className="flex flex-col">
+              <span className="text-white font-medium mb-4">Your Message</span>
+              <textarea
+                rows="7"
+                name="message"
+                value={form.message}
+                onChange={handleChange}
+                placeholder="Subject"
+                className="bg-tertiary py-4 px-6 placeholder:text-secondary text-white rounded-lg outline-none border-none font-medium"
+              />
+            </label>
 
-      <motion.div
-        variants={slideIn('right', 'tween', 0.2, 1)}
-        className="xl:flex-1 xl:h-auto md:h-[550px] h-[350px] relative"
-      >
-        <MetalPlanetCanvas />
-      </motion.div>
+            <div className="flex gap-4">
+              <button
+                type="submit"
+                className="bg-tertiary py-3 px-8 outline-none w-fit text-white font-bold shadow-md rounded-xl transition-all duration-300 
+                         hover:bg-purple-700
+                         hover:ring-1 hover:ring-purple-700
+                         hover:shadow-purple-600 hover:shadow-0.25g 
+                         hover:translate-y-[-2px]"
+              >
+                {loading ? 'Sending...' : 'Send'}
+              </button>
+            </div>
+          </form>
+        </motion.div>
+
+        <motion.div
+          variants={slideIn('right', 'tween', 0.2, 1)}
+          className="xl:flex-1 xl:h-auto md:h-[550px] h-[350px]"
+        >
+          <MetalPlanetCanvas />
+        </motion.div>
+      </div>
+
+      {/* Footer Section */}
+      <footer className="mt-10 text-center text-gray-400 text-sm py-4">
+        &copy; 2025 Saswath Yeshwanth. All rights reserved.
+      </footer>
     </div>
   );
 };
