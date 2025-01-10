@@ -16,7 +16,7 @@ const Ball = (props) => {
   // Pulsing animation using useFrame
   useFrame(({ clock }) => {
     if (meshRef.current) {
-      const scale = 2.75 + Math.sin(clock.getElapsedTime() * 2) * 0.25; // Adjust amplitude and speed
+      const scale = 2.75 + Math.sin(clock.getElapsedTime()) * 0.25; // Adjust amplitude and speed
       meshRef.current.scale.set(scale, scale, scale);
     }
   });
