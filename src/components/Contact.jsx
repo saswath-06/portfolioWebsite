@@ -106,7 +106,7 @@ const Contact = () => {
               href="mailto:s2yeshwa@uwaterloo.ca"
               className="text-blue-400 hover:underline"
             >
-              s2yeshwa@uwaterloo.ca
+              saswath.yeshwanth@uwaterloo.ca
             </a>
           </p>
 
