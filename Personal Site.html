@@ -1,0 +1,2741 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Personal Site</title>
+
+<!-- Fonts: distinctive display + refined mono -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=JetBrains+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+
+<!-- Spline vanilla viewer — loads any .splinecode URL directly in HTML, no build step needed -->
+<script type="module" src="https://unpkg.com/@splinetool/viewer@1.12.87/build/spline-viewer.js"></script>
+
+<style>
+  /* ---------- Tweakable defaults (persisted by host) ---------- */
+  :root {
+    /* these are overridden at runtime from TWEAK_DEFAULTS */
+    --bg: #e8e8e6;
+    --fg: #0a0a0a;
+    --muted: rgba(10,10,10,0.5);
+    --accent: #0a0a0a;
+    --name-size: clamp(80px, 16vw, 280px);
+    --grain-opacity: 0.35;
+    --vignette-opacity: 0.15;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { min-height: 100%; }
+  html {
+    /* Match the bottom of the page (contact section is dark) so overscroll
+       doesn't reveal the browser's default light grey. */
+    background: #0a0a0a;
+  }
+  html, body { overscroll-behavior: none; }
+  html { scroll-behavior: smooth; }
+  body {
+    font-family: 'Space Grotesk', -apple-system, system-ui, sans-serif;
+    color: var(--fg);
+    -webkit-font-smoothing: antialiased;
+    position: relative;
+    transition: color 0.6s ease;
+    /* Single continuous gradient for the entire page (used to live in .backdrop
+       and caused a visible seam where the hero ended). Now sticks to the viewport
+       so every section sits on the same atmospheric backdrop. */
+    background: var(--bg);
+    background-image:
+      radial-gradient(ellipse 90vw 70vh at 50% 28vh,
+        color-mix(in oklab, var(--bg) 70%, white 30%) 0%,
+        var(--bg) 55%,
+        color-mix(in oklab, var(--bg) 88%, black 12%) 100%);
+    background-attachment: fixed;
+  }
+
+  /* ---------- Paint trail canvas (sits above everything visually,
+     but transparent to pointer events so the page still works) ---------- */
+  #paintTrail {
+    position: fixed;
+    inset: 0;
+    width: 100vw;
+    height: 100vh;
+    pointer-events: none;
+    z-index: 50;
+  }
+
+  /* ---------- Stage (hero section) ---------- */
+  .stage {
+    position: relative;
+    height: 100vh;
+    width: 100%;
+    overflow: hidden;
+  }
+
+  /* Backdrop kept as a hook for the hero but the gradient lives on <body> now */
+  .backdrop {
+    position: absolute;
+    inset: 0;
+    background: transparent;
+    z-index: 0;
+  }
+
+  /* Grain overlay */
+  .grain {
+    position: absolute;
+    inset: -50%;
+    z-index: 6;
+    pointer-events: none;
+    opacity: var(--grain-opacity);
+    mix-blend-mode: overlay;
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='200' height='200'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0.6 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+    animation: grainShift 8s steps(8) infinite;
+  }
+  @keyframes grainShift {
+    0%,100% { transform: translate(0,0); }
+    10% { transform: translate(-2%,-3%); }
+    20% { transform: translate(-4%,2%); }
+    30% { transform: translate(3%,-4%); }
+    40% { transform: translate(-1%,3%); }
+    50% { transform: translate(-3%,1%); }
+    60% { transform: translate(3%,2%); }
+    70% { transform: translate(-2%,-3%); }
+    80% { transform: translate(4%,-1%); }
+    90% { transform: translate(-1%,2%); }
+  }
+
+  /* Vignette */
+  .vignette {
+    position: absolute; inset: 0; z-index: 7; pointer-events: none;
+    background: radial-gradient(ellipse at center, transparent 50%, rgba(0,0,0,var(--vignette-opacity)) 100%);
+  }
+
+  /* ---------- Name typography ---------- */
+  .name-wrap {
+    position: absolute;
+    top: 12vh;
+    left: 0;
+    right: 0;
+    bottom: auto;
+    z-index: 4;
+    display: flex;
+    align-items: flex-start;
+    justify-content: flex-start;
+    pointer-events: none;
+    padding: 0 3vw;
+  }
+  .name {
+    font-family: 'Space Grotesk', sans-serif;
+    font-weight: 700;
+    font-size: clamp(40px, 7vw, 120px);
+    letter-spacing: -0.05em;
+    line-height: 0.92;
+    text-align: left;
+    color: var(--fg);
+    text-transform: lowercase;
+    user-select: none;
+    will-change: transform;
+    max-width: 60vw;
+    white-space: pre-line;
+  }
+  .name .char {
+    display: inline-block;
+    opacity: 0;
+    transform: translateY(40px);
+    animation: charIn 1.2s cubic-bezier(.2,.8,.2,1) forwards;
+  }
+  @keyframes charIn {
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  /* ---------- Spline layer: full bleed ---------- */
+  .spline-layer {
+    position: absolute;
+    inset: 0;
+    z-index: 3;
+    pointer-events: auto;
+    /* Fade the canvas at its bottom edge so the slight ambient tint from the
+       3D scene dissolves into the page gradient instead of leaving a hard seam. */
+    -webkit-mask-image: linear-gradient(to bottom, #000 0%, #000 78%, transparent 100%);
+            mask-image: linear-gradient(to bottom, #000 0%, #000 78%, transparent 100%);
+  }
+  .spline-layer spline-viewer {
+    width: 100%;
+    height: 100%;
+    display: block;
+    background: transparent !important;
+  }
+  .spline-layer spline-viewer::part(canvas),
+  .spline-layer spline-viewer canvas {
+    background: transparent !important;
+    width: 100% !important;
+    height: 100% !important;
+  }
+  /* hide Spline's built-in logo (works in some versions) */
+  .spline-layer spline-viewer::part(logo) { display: none !important; }
+
+  /* Watermark cover (kept as no-op fallback; shadow-DOM CSS does the real hiding) */
+  .watermark-cover {
+    display: none;
+  }
+
+  /* Placeholder shown when no scene URL is set */
+  .placeholder {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    pointer-events: none;
+    z-index: 3;
+  }
+  .ph-card {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--fg);
+    background: color-mix(in oklab, var(--bg) 70%, transparent);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    border: 1px solid color-mix(in oklab, var(--fg) 20%, transparent);
+    padding: 18px 22px;
+    border-radius: 4px;
+    max-width: 420px;
+    text-align: center;
+    line-height: 1.6;
+    pointer-events: auto;
+  }
+  .ph-card b { font-weight: 500; }
+  .ph-card .hint {
+    display: block;
+    margin-top: 8px;
+    color: var(--muted);
+    font-size: 10px;
+  }
+
+  /* Loading spinner */
+  .loader-wrap {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 4;
+    pointer-events: none;
+    transition: opacity 0.4s ease;
+  }
+  .loader-wrap.hidden { opacity: 0; }
+  .loader {
+    width: 28px; height: 28px;
+    border: 1.5px solid color-mix(in oklab, var(--fg) 20%, transparent);
+    border-top-color: var(--fg);
+    border-radius: 50%;
+    animation: spin 0.9s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ---------- Nav (fixed at top, above all sections) ---------- */
+  .nav {
+    position: fixed;
+    top: 28px;
+    left: 28px;
+    right: 28px;
+    z-index: 50;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--fg);
+    pointer-events: none;
+  }
+  .nav > * { pointer-events: auto; }
+  .nav .brand {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .nav .brand .dot {
+    width: 6px; height: 6px; border-radius: 50%;
+    background: var(--fg);
+    animation: pulse 2s ease-in-out infinite;
+  }
+  @keyframes pulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.4; transform: scale(0.7); }
+  }
+  .nav .links {
+    display: flex;
+    gap: 28px;
+  }
+  .nav .links a {
+    color: var(--fg);
+    text-decoration: none;
+    position: relative;
+    padding: 6px 0;
+    transition: opacity 0.3s;
+  }
+  .nav .links a::after {
+    content: '';
+    position: absolute;
+    left: 0; bottom: 0;
+    width: 100%; height: 1px;
+    background: currentColor;
+    transform: scaleX(0);
+    transform-origin: right;
+    transition: transform 0.4s cubic-bezier(.2,.8,.2,1);
+  }
+  .nav .links a:hover::after {
+    transform: scaleX(1);
+    transform-origin: left;
+  }
+  .nav .meta {
+    font-feature-settings: 'tnum';
+  }
+
+  /* Bottom meta row */
+  .meta-row {
+    position: absolute;
+    bottom: 28px;
+    left: 28px;
+    right: 28px;
+    z-index: 10;
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+  .meta-row .tagline {
+    color: var(--fg);
+    font-size: 12px;
+    letter-spacing: 0.04em;
+    text-transform: none;
+    font-family: 'Space Grotesk', sans-serif;
+    font-weight: 400;
+    max-width: 360px;
+    line-height: 1.4;
+  }
+  .meta-row .scroll-hint {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .meta-row .scroll-hint .line {
+    width: 40px;
+    height: 1px;
+    background: currentColor;
+    position: relative;
+    overflow: hidden;
+  }
+  .meta-row .scroll-hint .line::after {
+    content: '';
+    position: absolute;
+    left: -100%;
+    top: 0;
+    width: 50%;
+    height: 100%;
+    background: var(--fg);
+    animation: slideLine 2.4s cubic-bezier(.6,.2,.4,.8) infinite;
+  }
+  @keyframes slideLine {
+    to { left: 200%; }
+  }
+
+  /* Side year rails */
+  .rail {
+    position: absolute;
+    z-index: 10;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.2em;
+    color: var(--muted);
+    text-transform: uppercase;
+    writing-mode: vertical-rl;
+    transform: rotate(180deg);
+  }
+  .rail.left { left: 28px; top: 50%; transform: rotate(180deg) translateY(50%); }
+  .rail.right { right: 28px; top: 50%; transform: rotate(180deg) translateY(50%); }
+
+  /* =========================================================
+     SECTIONS — editorial, scroll-driven
+     ========================================================= */
+  .section {
+    position: relative;
+    padding: clamp(80px, 14vh, 200px) 0;
+    background: transparent;
+    color: var(--fg);
+    z-index: 20;
+  }
+  .section-inner {
+    width: min(1280px, 92vw);
+    margin: 0 auto;
+    position: relative;
+  }
+  .section-head {
+    display: flex;
+    align-items: baseline;
+    gap: 18px;
+    margin-bottom: clamp(40px, 7vh, 96px);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+  .section-label { white-space: nowrap; }
+  .section-rule {
+    flex: 1;
+    height: 1px;
+    background: color-mix(in oklab, var(--fg) 22%, transparent);
+  }
+  .section-head--inline { margin-bottom: 32px; }
+
+  /* Reveal primitives — controlled by IntersectionObserver */
+  [data-reveal] {
+    opacity: 0;
+    transform: translateY(28px);
+    transition: opacity 1s cubic-bezier(.2,.8,.2,1), transform 1s cubic-bezier(.2,.8,.2,1);
+    transition-delay: var(--reveal-delay, 0s);
+  }
+  [data-reveal].is-in {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  /* Word-by-word reveal for manifesto */
+  [data-reveal-words] .word {
+    display: inline-block;
+    opacity: 0.12;
+    transform: translateY(0.4em);
+    transition: opacity 0.6s ease, transform 0.6s cubic-bezier(.2,.8,.2,1);
+  }
+  [data-reveal-words] .word.is-in {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  /* ---------- ABOUT ---------- */
+  .about-layout {
+    display: grid;
+    grid-template-columns: 340px 1fr;
+    gap: clamp(40px, 6vw, 96px);
+    align-items: start;
+  }
+  .about-side {
+    position: relative;
+    height: 100%;
+  }
+  .about-sticky {
+    position: sticky;
+    top: 14vh;
+  }
+  .portrait-card {
+    border: 1px solid color-mix(in oklab, var(--fg) 16%, transparent);
+    padding: 18px;
+    background: color-mix(in oklab, var(--bg) 88%, white 12%);
+    border-radius: 4px;
+    transform-style: preserve-3d;
+    transition: transform 0.4s cubic-bezier(.2,.8,.2,1);
+    will-change: transform;
+  }
+  .portrait-frame {
+    position: relative;
+    aspect-ratio: 1;
+    overflow: hidden;
+    background: color-mix(in oklab, var(--bg) 80%, black 8%);
+    border-radius: 2px;
+    margin-bottom: 16px;
+  }
+  .portrait-grid {
+    position: absolute;
+    inset: 0;
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    grid-template-rows: repeat(3, 1fr);
+  }
+  .pg-cell {
+    border-right: 1px solid color-mix(in oklab, var(--fg) 8%, transparent);
+    border-bottom: 1px solid color-mix(in oklab, var(--fg) 8%, transparent);
+  }
+  .pg-cell:nth-child(3n) { border-right: 0; }
+  .pg-cell:nth-child(n+7) { border-bottom: 0; }
+  .portrait-mono {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: 'Space Grotesk', sans-serif;
+    font-weight: 700;
+    font-size: 32px;
+    letter-spacing: -0.02em;
+    color: var(--fg);
+    line-height: 1;
+    text-align: center;
+  }
+  .portrait-scan {
+    position: absolute;
+    left: 0; right: 0;
+    height: 2px;
+    background: linear-gradient(to right, transparent, var(--fg), transparent);
+    opacity: 0.5;
+    top: 0;
+    animation: scan 4.5s linear infinite;
+    mix-blend-mode: overlay;
+  }
+  @keyframes scan {
+    0% { top: 0; }
+    100% { top: 100%; }
+  }
+  .portrait-meta {
+    display: grid;
+    grid-template-columns: 70px 1fr;
+    gap: 6px 14px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+  }
+  .portrait-meta dt { opacity: 0.5; }
+  .portrait-meta dd { color: var(--fg); }
+  .status-dot {
+    display: inline-block;
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: #22c55e;
+    margin-right: 6px;
+    vertical-align: 1px;
+    box-shadow: 0 0 0 0 rgba(34,197,94, 0.6);
+    animation: statusPulse 2s ease-out infinite;
+  }
+  @keyframes statusPulse {
+    0% { box-shadow: 0 0 0 0 rgba(34,197,94, 0.45); }
+    70% { box-shadow: 0 0 0 8px rgba(34,197,94, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(34,197,94, 0); }
+  }
+
+  .about-body { padding-top: 12px; }
+  .manifesto {
+    font-family: 'Space Grotesk', sans-serif;
+    font-weight: 400;
+    font-size: clamp(17px, 1.6vw, 22px);
+    letter-spacing: -0.01em;
+    line-height: 1.5;
+    text-wrap: pretty;
+    color: var(--fg);
+    margin-bottom: clamp(48px, 8vh, 96px);
+    max-width: 62ch;
+  }
+  .manifesto p + p {
+    margin-top: 1em;
+  }
+  .manifesto em {
+    font-style: italic;
+    font-weight: 500;
+    color: color-mix(in oklab, var(--fg) 100%, transparent);
+    position: relative;
+  }
+  .manifesto em::after {
+    content: '';
+    position: absolute;
+    left: -2px; right: -2px; bottom: 0.06em;
+    height: 0.12em;
+    background: color-mix(in oklab, var(--fg) 18%, transparent);
+    border-radius: 1px;
+    z-index: -1;
+  }
+
+  .about-grid-list {
+    list-style: none;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0;
+    border-top: 1px solid color-mix(in oklab, var(--fg) 18%, transparent);
+  }
+  .about-grid-list li {
+    display: grid;
+    grid-template-columns: 36px 1fr;
+    grid-template-rows: auto auto;
+    gap: 4px 18px;
+    padding: 22px 0;
+    border-bottom: 1px solid color-mix(in oklab, var(--fg) 12%, transparent);
+    align-items: baseline;
+  }
+  .about-grid-list li:nth-child(odd) {
+    padding-right: 32px;
+    border-right: 1px solid color-mix(in oklab, var(--fg) 12%, transparent);
+  }
+  .about-grid-list li:nth-child(even) { padding-left: 32px; }
+  .about-grid-list .num {
+    grid-row: span 2;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 0.15em;
+    color: var(--muted);
+    align-self: start;
+    padding-top: 2px;
+  }
+  .about-grid-list .label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+  .about-grid-list .val {
+    font-family: 'Space Grotesk', sans-serif;
+    font-size: 18px;
+    font-weight: 500;
+    letter-spacing: -0.01em;
+    color: var(--fg);
+  }
+
+  /* ---------- WORK (pinned horizontal scroll) ---------- */
+  .work-pin {
+    position: relative;
+    height: 500vh; /* total scroll distance for the horizontal animation */
+  }
+  .work-sticky {
+    position: sticky;
+    top: 0;
+    height: 100vh;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    padding: clamp(80px, 14vh, 140px) 0 60px;
+    background: transparent;
+  }
+  .work-sticky .section-head {
+    width: min(1280px, 92vw);
+    margin: 0 auto 40px;
+  }
+  .work-track {
+    flex: 1;
+    display: flex;
+    gap: 32px;
+    padding: 0 6vw 0 6vw;
+    transform: translateX(0);
+    will-change: transform;
+    align-items: stretch;
+  }
+  /* End spacer so the last card has room to fully enter the viewport before scroll ends */
+  .work-track::after {
+    content: '';
+    flex: 0 0 28vw;
+    align-self: stretch;
+  }
+  .work-card {
+    flex: 0 0 min(560px, 82vw);
+    position: relative;
+    padding: 36px 36px 40px;
+    border: 1px solid color-mix(in oklab, var(--fg) 18%, transparent);
+    background: color-mix(in oklab, var(--bg) 90%, white 10%);
+    border-radius: 4px;
+    display: flex;
+    flex-direction: column;
+    transition: transform 0.5s cubic-bezier(.2,.8,.2,1), background 0.4s;
+  }
+  .work-card:hover {
+    background: color-mix(in oklab, var(--bg) 76%, white 24%);
+  }
+  .wc-year {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 0.18em;
+    color: var(--muted);
+    margin-bottom: 24px;
+  }
+  .wc-role {
+    font-family: 'Space Grotesk', sans-serif;
+    font-weight: 600;
+    font-size: clamp(24px, 2.4vw, 32px);
+    letter-spacing: -0.025em;
+    line-height: 1.08;
+    margin-bottom: 8px;
+    color: var(--fg);
+    text-wrap: balance;
+  }
+  .wc-place {
+    font-family: 'Space Grotesk', sans-serif;
+    font-size: 15px;
+    color: var(--muted);
+    margin-bottom: 24px;
+  }
+  .wc-desc {
+    font-size: 14.5px;
+    line-height: 1.55;
+    color: color-mix(in oklab, var(--fg) 80%, transparent);
+    flex: 1;
+    text-wrap: pretty;
+  }
+  .wc-desc.is-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .wc-desc.is-list li {
+    position: relative;
+    padding-left: 18px;
+    text-wrap: pretty;
+  }
+  .wc-desc.is-list li::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 0.62em;
+    width: 8px;
+    height: 1px;
+    background: color-mix(in oklab, var(--fg) 40%, transparent);
+  }
+  .wc-stack {
+    list-style: none;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 24px;
+  }
+  .wc-stack li {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    padding: 5px 10px;
+    border: 1px solid color-mix(in oklab, var(--fg) 18%, transparent);
+    border-radius: 999px;
+    color: var(--muted);
+  }
+  .wc-index {
+    position: absolute;
+    top: 24px;
+    right: 28px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.2em;
+    color: var(--muted);
+  }
+  .work-card--more {
+    background: var(--fg);
+    color: var(--bg);
+    border-color: var(--fg);
+  }
+  .work-card--more .wc-year,
+  .work-card--more .wc-place,
+  .work-card--more .wc-desc,
+  .work-card--more .wc-index { color: color-mix(in oklab, var(--bg) 70%, transparent); }
+  .work-card--more .wc-role { color: var(--bg); }
+  .wc-link {
+    margin-top: 24px;
+    align-self: flex-start;
+    color: var(--bg);
+    text-decoration: none;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    border-bottom: 1px solid color-mix(in oklab, var(--bg) 50%, transparent);
+    padding-bottom: 3px;
+    transition: border-color 0.3s;
+  }
+  .wc-link:hover { border-color: var(--bg); }
+  .work-progress {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    width: min(1280px, 92vw);
+    margin: 32px auto 0;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+  .wp-bar {
+    flex: 1;
+    height: 1px;
+    background: color-mix(in oklab, var(--fg) 14%, transparent);
+    position: relative;
+    overflow: hidden;
+  }
+  .wp-fill {
+    position: absolute;
+    left: 0; top: 0; bottom: 0;
+    width: 0%;
+    background: var(--fg);
+    transition: width 0.1s linear;
+  }
+
+  /* ---------- PROJECTS ---------- */
+  .projects-list {
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: clamp(60px, 10vh, 140px);
+  }
+  .project {
+    --p: 0; /* 0..1 scroll progress through viewport */
+    display: grid;
+    grid-template-columns: 80px 1fr 1fr;
+    gap: clamp(24px, 4vw, 64px);
+    align-items: center;
+    position: relative;
+  }
+  .project:nth-child(even) {
+    grid-template-columns: 80px 1fr 1fr;
+  }
+  .project:nth-child(even) .project-visual { order: 3; }
+  .project:nth-child(even) .project-text { order: 2; }
+  .project-num {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 0.2em;
+    color: var(--muted);
+    align-self: start;
+    padding-top: 8px;
+    transform: translateY(calc((1 - var(--p)) * 20px));
+    transition: transform 0.1s linear;
+  }
+  .project-visual {
+    aspect-ratio: 4 / 3;
+    position: relative;
+    overflow: hidden;
+    background: color-mix(in oklab, var(--bg) 78%, black 8%);
+    border-radius: 4px;
+    border: 1px solid color-mix(in oklab, var(--fg) 12%, transparent);
+    /* Parallax-y enter: rise + scale-in based on scroll progress */
+    transform:
+      translateY(calc((1 - var(--p)) * 80px))
+      scale(calc(0.94 + var(--p) * 0.06));
+    opacity: calc(0.4 + var(--p) * 0.6);
+    transition: transform 0.15s linear, opacity 0.15s linear;
+  }
+  .project-visual--image {
+    background: #fafaf8;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .project-visual--dark {
+    background: #0a0f1c;
+    position: relative;
+  }
+  /* Subtle grid + radial glow that extend the Boardsmith image's design */
+  .project-visual--dark::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background-image:
+      linear-gradient(to right, rgba(255,255,255,0.035) 1px, transparent 1px),
+      linear-gradient(to bottom, rgba(255,255,255,0.035) 1px, transparent 1px);
+    background-size: 32px 32px;
+    background-position: -1px -1px;
+    pointer-events: none;
+  }
+  .project-visual--dark::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(ellipse 60% 55% at 50% 45%, rgba(220,180,90,0.12) 0%, transparent 70%);
+    pointer-events: none;
+  }
+  .project-visual--dark .pv-img {
+    /* Show the FULL image; the panel's matching bg + grid extends seamlessly around it */
+    width: 86%;
+    height: 86%;
+    object-fit: contain;
+    position: relative;
+    z-index: 1;
+  }
+  .project-visual--dark .pv-tag {
+    z-index: 2;
+  }
+  .pv-img {
+    width: 92%;
+    height: 92%;
+    object-fit: contain;
+    transform: translateY(calc((0.5 - var(--p)) * 24px)) scale(calc(1 + var(--p) * 0.04));
+    transition: transform 0.15s linear;
+  }
+  .pv-img--multiply {
+    mix-blend-mode: multiply;
+  }
+  .pv-img--cover {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+  .pv-blob {
+    position: absolute;
+    border-radius: 50%;
+    filter: blur(40px);
+    opacity: 0.85;
+    /* Inner parallax: blobs drift counter to scroll */
+    transform: translate(
+      calc((0.5 - var(--p)) * 60px),
+      calc((0.5 - var(--p)) * 80px)
+    );
+    transition: transform 0.15s linear;
+  }
+  .pv-blob--a { left: -10%; top: -20%; width: 70%; height: 70%; background: hsl(268 90% 65%); }
+  .pv-blob--b { right: -15%; bottom: -25%; width: 80%; height: 80%; background: hsl(200 95% 55%); opacity: 0.6; }
+  .pv-blob--c { left: 20%; top: 10%; width: 80%; height: 80%; background: hsl(28 95% 58%); }
+  .pv-blob--d { left: -10%; bottom: -20%; width: 90%; height: 90%; background: hsl(160 70% 50%); }
+  .pv-blob--e { right: -20%; top: -15%; width: 75%; height: 75%; background: hsl(330 80% 60%); opacity: 0.55; }
+  .pv-blob--f { left: 15%; top: -10%; width: 90%; height: 100%; background: hsl(48 95% 60%); }
+  .pv-grid {
+    position: absolute;
+    inset: 0;
+    background-image:
+      linear-gradient(to right, color-mix(in oklab, var(--fg) 18%, transparent) 1px, transparent 1px),
+      linear-gradient(to bottom, color-mix(in oklab, var(--fg) 18%, transparent) 1px, transparent 1px);
+    background-size: 48px 48px;
+    mix-blend-mode: overlay;
+    opacity: 0.5;
+  }
+  .pv-grid--tight { background-size: 24px 24px; }
+  .pv-tag {
+    position: absolute;
+    left: 16px;
+    bottom: 14px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.18em;
+    color: var(--bg);
+    background: var(--fg);
+    padding: 5px 9px;
+    border-radius: 2px;
+  }
+  .project-text {
+    transform: translateY(calc((1 - var(--p)) * 40px));
+    opacity: calc(0.2 + var(--p) * 0.8);
+    transition: transform 0.15s linear, opacity 0.15s linear;
+  }
+  .project-year {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 0.18em;
+    color: var(--muted);
+    display: block;
+    margin-bottom: 16px;
+  }
+  .project-title {
+    font-family: 'Space Grotesk', sans-serif;
+    font-weight: 600;
+    font-size: clamp(28px, 2.6vw, 42px);
+    letter-spacing: -0.03em;
+    line-height: 1.06;
+    margin-bottom: 18px;
+    color: var(--fg);
+    text-wrap: balance;
+  }
+  .project-badge {
+    display: inline-block;
+    vertical-align: middle;
+    margin-left: 12px;
+    margin-top: 8px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--fg);
+    background: color-mix(in oklab, var(--fg) 8%, transparent);
+    border: 1px solid color-mix(in oklab, var(--fg) 18%, transparent);
+    padding: 5px 10px;
+    border-radius: 999px;
+    line-height: 1;
+    white-space: nowrap;
+    letter-spacing: 0.16em;
+  }
+  .project-desc {
+    font-size: 16px;
+    line-height: 1.55;
+    color: color-mix(in oklab, var(--fg) 78%, transparent);
+    max-width: 52ch;
+    margin-bottom: 24px;
+    text-wrap: pretty;
+  }
+  .project-desc.is-list {
+    list-style: none;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .project-desc.is-list li {
+    position: relative;
+    padding-left: 20px;
+    text-wrap: pretty;
+  }
+  .project-desc.is-list li::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 0.65em;
+    width: 10px;
+    height: 1px;
+    background: color-mix(in oklab, var(--fg) 40%, transparent);
+  }
+  /* First line reads as a lead/intro sentence */
+  .project-desc.is-list li:first-child {
+    color: var(--fg);
+    font-weight: 500;
+    padding-left: 0;
+    margin-bottom: 4px;
+  }
+  .project-desc.is-list li:first-child::before { display: none; }
+  .project-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 14px;
+    color: var(--fg);
+    text-decoration: none;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    border-bottom: 1px solid var(--fg);
+    padding-bottom: 5px;
+    transition: gap 0.4s cubic-bezier(.2,.8,.2,1);
+  }
+  .project-link:hover { gap: 22px; }
+  .project-link .arr {
+    font-family: 'Space Grotesk', sans-serif;
+    font-weight: 400;
+    letter-spacing: normal;
+  }
+
+  /* ---------- CONTACT ---------- */
+  .section--contact { padding: 0; }
+  .contact-pin {
+    position: relative;
+    height: 130vh;
+    background: var(--fg);
+    color: var(--bg);
+  }
+  .contact-sticky {
+    position: sticky;
+    top: 0;
+    height: 100vh;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    padding: clamp(80px, 12vh, 140px) 0 36px;
+    background: var(--fg);
+    color: var(--bg);
+  }
+  .contact-sticky .section-head {
+    width: min(1280px, 92vw);
+    margin: 0 auto 0;
+    color: color-mix(in oklab, var(--bg) 60%, transparent);
+  }
+  .contact-sticky .section-rule {
+    background: color-mix(in oklab, var(--bg) 30%, transparent);
+  }
+  .contact-stage {
+    flex: 1;
+    width: min(1280px, 92vw);
+    margin: 0 auto;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    --cp: 0;
+  }
+  .contact-prelude {
+    font-family: 'Space Grotesk', sans-serif;
+    font-size: clamp(14px, 1.2vw, 18px);
+    color: color-mix(in oklab, var(--bg) 60%, transparent);
+    margin-bottom: clamp(20px, 3vh, 40px);
+    letter-spacing: -0.005em;
+  }
+  .contact-email {
+    display: block;
+    color: var(--bg);
+    text-decoration: none;
+    font-family: 'Space Grotesk', sans-serif;
+    font-weight: 700;
+    line-height: 0.86;
+    letter-spacing: -0.06em;
+    text-transform: lowercase;
+    /* Scales up as user scrolls into the pinned section */
+    font-size: clamp(56px, calc(8vw + var(--cp, 0) * 8vw), 220px);
+    transition: font-size 0.1s linear, color 0.4s;
+  }
+  .ce-at {
+    display: inline-block;
+    transform: rotate(calc(var(--cp, 0) * -15deg));
+    transition: transform 0.1s linear;
+    color: color-mix(in oklab, var(--bg) 60%, transparent);
+  }
+  .ce-line { display: inline-block; }
+  .contact-email:hover .ce-at { color: var(--bg); }
+
+  .contact-links {
+    list-style: none;
+    width: min(1280px, 92vw);
+    margin: clamp(24px, 4vh, 48px) auto 0;
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    border-top: 1px solid color-mix(in oklab, var(--bg) 28%, transparent);
+  }
+  .contact-links li {
+    border-right: 1px solid color-mix(in oklab, var(--bg) 18%, transparent);
+  }
+  .contact-links li:last-child { border-right: 0; }
+  .contact-links a {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    padding: 24px 18px;
+    text-decoration: none;
+    color: var(--bg);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    transition: background 0.3s;
+  }
+  .contact-links a:hover {
+    background: color-mix(in oklab, var(--bg) 10%, transparent);
+  }
+  .cl-label { font-weight: 500; }
+  .cl-handle { color: color-mix(in oklab, var(--bg) 55%, transparent); flex: 1; }
+  .cl-arr { color: color-mix(in oklab, var(--bg) 55%, transparent); }
+  .site-foot {
+    width: min(1280px, 92vw);
+    margin: 28px auto 0;
+    display: flex;
+    justify-content: space-between;
+    gap: 16px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: color-mix(in oklab, var(--bg) 50%, transparent);
+  }
+  .foot-mid { flex: 1; text-align: center; }
+
+  @media (max-width: 880px) {
+    .about-layout { grid-template-columns: 1fr; }
+    .about-sticky { position: static; }
+    .about-grid-list { grid-template-columns: 1fr; }
+    .about-grid-list li:nth-child(odd) { padding-right: 0; border-right: 0; }
+    .about-grid-list li:nth-child(even) { padding-left: 0; }
+    .project { grid-template-columns: 60px 1fr; }
+    .project:nth-child(even) { grid-template-columns: 60px 1fr; }
+    .project-visual { grid-column: 2; }
+    .project:nth-child(even) .project-visual { order: 0; }
+    .project:nth-child(even) .project-text { order: 0; }
+    .contact-links { grid-template-columns: repeat(2, 1fr); }
+    .contact-links li:nth-child(2) { border-right: 0; }
+    .contact-links li:nth-child(1), .contact-links li:nth-child(2) {
+      border-bottom: 1px solid color-mix(in oklab, var(--bg) 18%, transparent);
+    }
+    .work-pin { height: auto; }
+    .work-sticky { position: static; height: auto; overflow: visible; }
+    .work-track { flex-direction: column; padding: 0 6vw; }
+    .work-card { flex: 0 0 auto; }
+  }
+
+  /* ---------- Tweaks panel ---------- */
+  .tweaks {
+    position: fixed;
+    right: 20px;
+    bottom: 64px;
+    z-index: 100;
+    width: 280px;
+    background: color-mix(in oklab, var(--bg) 85%, black 15%);
+    color: var(--fg);
+    border: 1px solid color-mix(in oklab, var(--fg) 15%, transparent);
+    border-radius: 6px;
+    padding: 16px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    box-shadow: 0 20px 40px rgba(0,0,0,0.12);
+    display: none;
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+  }
+  .tweaks.open { display: block; }
+  .tweaks h3 {
+    font-size: 10px;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    margin-bottom: 14px;
+    opacity: 0.6;
+    font-weight: 500;
+  }
+  .tweaks .row {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-bottom: 12px;
+  }
+  .tweaks label {
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    opacity: 0.7;
+  }
+  .tweaks input[type="text"],
+  .tweaks input[type="url"] {
+    width: 100%;
+    background: transparent;
+    border: 1px solid color-mix(in oklab, var(--fg) 20%, transparent);
+    color: var(--fg);
+    padding: 7px 9px;
+    font-family: inherit;
+    font-size: 11px;
+    border-radius: 3px;
+    outline: none;
+  }
+  .tweaks input[type="text"]:focus,
+  .tweaks input[type="url"]:focus {
+    border-color: var(--fg);
+  }
+  .tweaks input[type="range"] {
+    width: 100%;
+    accent-color: var(--fg);
+  }
+  .tweaks .theme-row {
+    display: flex;
+    gap: 6px;
+  }
+  .tweaks .theme-row button {
+    flex: 1;
+    background: transparent;
+    border: 1px solid color-mix(in oklab, var(--fg) 20%, transparent);
+    color: var(--fg);
+    padding: 7px 4px;
+    font-family: inherit;
+    font-size: 9px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    cursor: pointer;
+    border-radius: 3px;
+  }
+  .tweaks .theme-row button.active {
+    background: var(--fg);
+    color: var(--bg);
+  }
+  .tweaks .val {
+    font-size: 10px;
+    opacity: 0.5;
+    float: right;
+  }
+
+  /* ---------- Entry animations ---------- */
+  .nav, .meta-row, .rail {
+    opacity: 0;
+    animation: fadeIn 1s ease 0.8s forwards;
+  }
+  @keyframes fadeIn { to { opacity: 1; } }
+
+  .spline-layer { opacity: 0; transition: opacity 0.8s ease; }
+  .spline-layer.ready { opacity: 1; }
+
+  /* Responsive */
+  @media (max-width: 720px) {
+    .nav .links { display: none; }
+    .rail { display: none; }
+    .meta-row { flex-direction: column; gap: 16px; align-items: flex-start; }
+  }
+</style>
+</head>
+<body>
+
+<!-- Paint trail canvas — sits above everything, ignores pointer events -->
+<canvas id="paintTrail" aria-hidden="true"></canvas>
+
+<script>
+  const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
+    "name": "Saswath\nYeshwanth",
+    "tagline": "tron @ uwaterloo",
+    "splineUrl": "https:\/\/prod.spline.design\/g5EHJhhAsypxO4ws\/scene.splinecode",
+    "theme": "light",
+    "nameSize": 16.5,
+    "grain": 0.35,
+    "vignette": 0.15,
+    "shaderIntensity": 0.6,
+    "paintEnabled": true,
+    "paintHue": 211,
+    "paintIntensity": 0.85,
+    "paintSize": 46
+  }/*EDITMODE-END*/;
+</script>
+
+<!-- STAGE -->
+<div class="stage">
+  <div class="backdrop"></div>
+
+  <!-- Name (z-index 2, behind Spline) -->
+  <div class="name-wrap">
+    <h1 class="name" id="nameEl" aria-label=""></h1>
+  </div>
+
+  <!-- Spline 3D layer (z-index 3, occludes name) -->
+  <div class="spline-layer" id="splineLayer">
+    <!-- spline-viewer or placeholder injected here -->
+  </div>
+
+  <!-- Patch over Spline's fixed "Built with Spline" watermark -->
+  <div class="watermark-cover" aria-hidden="true"></div>
+
+  <!-- Loader -->
+  <div class="loader-wrap" id="loader"><div class="loader"></div></div>
+
+  <!-- Grain + vignette -->
+  <div class="grain"></div>
+  <div class="vignette"></div>
+
+  <div class="meta-row">
+    <div class="tagline" id="taglineEl"></div>
+    <div class="scroll-hint">
+      <span>If infinitely loading in center, refresh page</span>
+      <span class="line"></span>
+    </div>
+  </div>
+</div>
+
+<!-- Fixed nav (outside the stage so it persists across sections) -->
+<nav class="nav">
+  <div class="brand">
+    <span class="dot" style="width: 0px"></span>
+    <span id="brandName"></span>
+  </div>
+  <div class="links">
+    <a href="#about">About</a>
+    <a href="#work">Work</a>
+    <a href="#projects">Projects</a>
+    <a href="#contact">Contact</a>
+  </div>
+  <div class="meta" id="clock" style="display:none"></div>
+</nav>
+
+<!-- ============ ABOUT ============ -->
+<section class="section section--about" id="about" data-screen-label="About">
+  <div class="section-inner">
+    <header class="section-head" data-reveal>
+      <span class="section-label">01 — about</span>
+      <span class="section-rule"></span>
+    </header>
+
+    <div class="about-layout">
+      <!-- Sticky coordinates / portrait card -->
+      <aside class="about-side">
+        <div class="about-sticky">
+          <div class="portrait-card" data-tilt>
+            <div class="portrait-frame">
+              <div class="portrait-grid">
+                <div class="pg-cell"></div><div class="pg-cell"></div><div class="pg-cell"></div>
+                <div class="pg-cell"></div><div class="pg-cell"></div><div class="pg-cell"></div>
+                <div class="pg-cell"></div><div class="pg-cell"></div><div class="pg-cell"></div>
+              </div>
+              <div class="portrait-mono">IMAGE TBA</div>
+              <div class="portrait-scan"></div>
+            </div>
+            <dl class="portrait-meta">
+              <dt>Name</dt><dd>Saswath Yeshwanth</dd>
+              <dt>Cycle</dt><dd>2026 · Spring</dd>
+              <dt>Status</dt><dd> AVAILABLE FOR FALL</dd>
+            </dl>
+          </div>
+        </div>
+      </aside>
+
+      <!-- Manifesto: each word reveals as you scroll -->
+      <div class="about-body">
+        <div class="manifesto" data-reveal-words>
+          <p>I'm a Mechatronics Engineering student at the University of Waterloo interested in robotics, ML, learned motion, and the software that makes physical systems behave intelligently.</p>
+          <p>At this stage, I look to optimize for depth over breadth. The intersection of hardware and learned behavior is where I want to build, and I'm spending this window figuring out exactly how to get there.</p>
+          <p>Currently studying full-time while building foundations in systems programming and ML, with my sights set on robot learning and autonomous systems.</p>
+        </div>
+
+        <ul class="about-grid-list">
+          <li data-reveal><span class="num">01</span><span class="label">Disciplines</span><span class="val">Software · Machine Learning · Robotics</span></li>
+          <li data-reveal><span class="num">02</span><span class="label">Stack</span><span class="val">C++ · Python · Pytorch · ROS2</span></li>
+          <li data-reveal><span class="num">03</span><span class="label">Looking for</span><span class="val">SWE / Robotics ML/AI internships, Fall '26</span></li>
+          <li data-reveal><span class="num">04</span><span class="label">Loves</span><span class="val">autonomous systems · the art of a good meal · carnatic music (performing)</span></li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ WORK ============ -->
+<!-- Pinned horizontal scroll: container is tall, inner is sticky, content translates horizontally with scroll -->
+<section class="section section--work" id="work" data-screen-label="Work">
+  <div class="work-pin">
+    <div class="work-sticky">
+      <header class="section-head section-head--inline" data-reveal>
+        <span class="section-label">02 — selected work</span>
+        <span class="section-rule"></span>
+      </header>
+      <div class="work-track" id="workTrack">
+        <article class="work-card">
+          <span class="wc-year">JAN 2026 - APR 2026</span>
+          <h3 class="wc-role">AI Software Engineer Intern</h3>
+          <span class="wc-place">CGI Inc.</span>
+          <p class="wc-desc">Trained a priority classifier on 280 ITSM tickets, tuning for weighted F1 and Critical ticket recall under 7% class imbalance
+Built duplicate detection via sentence embeddings and cosine similarity, calibrating threshold on 90 hand-labeled pairs to 0.86 precision
+Clustered 240 failure embeddings with DBSCAN, surfacing 3 actionable root causes for Foresters Financial
+Closed a data flywheel that improved ticket classification from 76% to 84% across retraining cycles</p>
+          <ul class="wc-stack">
+            <li>SKLEARN</li><li>DBSCAN</li><li>PYTHON</li><li>AZURE/AWS</li>
+          </ul>
+          <span class="wc-index">01</span>
+        </article>
+        <article class="work-card">
+          <span class="wc-year">JUL 2025 - AUG 2025</span>
+          <h3 class="wc-role">Cloud Engineering Intern</h3>
+          <span class="wc-place">Avanade Canada</span>
+          <p class="wc-desc">Architected a cloud-native AI accessibility platform across 8+ Azure services with a 6-person team
+Built an intelligent support chatbot covering 15+ disability categories with sentiment analysis and escalation routing
+Cut provisioning time by 30% with infrastructure as code and automated CI/CD pipelines</p>
+          <ul class="wc-stack">
+            <li>AZURE</li><li>DOCKER</li><li>PYTHON</li><li>GITHUB ACTIONS</li>
+          </ul>
+          <span class="wc-index">02</span>
+        </article>
+        <article class="work-card">
+          <span class="wc-year">OCT 2024 - MAR 2025</span>
+          <h3 class="wc-role">Controls Engineer</h3>
+          <span class="wc-place">UWaterloo</span>
+          <p class="wc-desc">Designed a mechanical airbrake system in SOLIDWORKS, validated via MATLAB flight simulation
+Built a custom PCB airbrake controller in KiCAD with signal processing to filter noisy telemetry during active flight</p>
+          <ul class="wc-stack">
+            <li>SOLIDWORKS</li><li>MATLAB</li><li>KICAD</li><li>C++</li>
+          </ul>
+          <span class="wc-index">03</span>
+        </article>
+      </div>
+      <div class="work-progress" aria-hidden="true">
+        <span class="wp-bar"><span class="wp-fill" id="workFill"></span></span>
+        <span class="wp-hint">scroll →</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ PROJECTS ============ -->
+<section class="section section--projects" id="projects" data-screen-label="Projects">
+  <div class="section-inner">
+    <header class="section-head" data-reveal>
+      <span class="section-label">03 — projects</span>
+      <span class="section-rule"></span>
+    </header>
+
+    <ol class="projects-list">
+      <li class="project" data-parallax>
+        <span class="project-num">001</span>
+        <div class="project-visual project-visual--image" aria-hidden="true">
+          <img class="pv-img pv-img--multiply" src="assets/pedisense-logo.png" alt="Pedisense logo" />
+          <span class="pv-tag">ESP32 · SWIFT · FASTAPI · GEMINI · SUPABASE</span>
+        </div>
+        <div class="project-text">
+          <span class="project-year">2026</span>
+          <h3 class="project-title">Smart Pressure Sensing Insoles <span class="project-badge">HACKPRINCETON SPRING ’26 FINALIST</span></h3>
+          <p class="project-desc">Clinical pressure mats cost $15,000. We built a directionally accurate version for $77 because our parents are diabetic and can't feel the pressure that destroys feet.
+
+Hand-soldered 10 FSR sensors, analog multiplexer, haptic motors, and transistor drivers onto an ESP32, streaming pressure data at 15Hz over BLE
+Derived clinical metrics — arch index, pronation, heel centering — computed locally on-device, interpreted by a Gemini-powered AI podiatrist
+Haptic alerts fire when sustained pressure exceeds threshold, running in background via CoreBluetooth</p>
+          <a class="project-link" href="https://github.com/saswath-06/Pedisense" target="_blank" rel="noopener"><span>Github</span> <span class="arr">↗</span></a>
+        </div>
+      </li>
+      <li class="project" data-parallax>
+        <span class="project-num">002</span>
+        <div class="project-visual project-visual--image project-visual--dark" aria-hidden="true">
+          <img class="pv-img" src="assets/boardsmith.png?v=4" alt="Boardsmith" />
+          <span class="pv-tag">PCB · AI · NATURAL LANGUAGE</span>
+        </div>
+        <div class="project-text">
+          <span class="project-year">APR 2026</span>
+          <h3 class="project-title">Natural Language  PCB Designer</h3>
+          <p class="project-desc">PCB design tools cost thousands and assume you already know electronics. Boardsmith doesn't.
+
+Describe a circuit in natural language or drop a breadboard photo and Gemini parses intent into a structured circuit, then a custom Lee-algorithm autorouter lays copper on a real board
+Streams 8 pipeline stages live via SSE: schematic, firmware, BOM, placement, routing, 3D render, Gerber bundle, all manufacturable by JLCPCB
+Generates pin-aware Arduino firmware, SPICE simulation links, and a real-time cost calculator from 1 to 500 boards</p>
+          <a class="project-link" href="https://github.com/saswath-06/natural_lang_pcb_designer" target="_blank" rel="noopener"><span>Github</span> <span class="arr">↗</span></a>
+        </div>
+      </li>
+      <li class="project" data-parallax>
+        <span class="project-num">003</span>
+        <div class="project-visual" aria-hidden="true">
+          <div class="pv-blob pv-blob--d"></div>
+          <div class="pv-blob pv-blob--e"></div>
+          <span class="pv-tag">CLIP · QDRANT · GPT-4o · SHOPIFY GRAPHQL </span>
+        </div>
+        <div class="project-text">
+          <span class="project-year">APR 2026</span>
+          <h3 class="project-title">Visual Inventory Catologer</h3>
+          <p class="project-desc">Shopify merchants spend days manually listing physical inventory online. VisualShelf cuts it to one click.
+
+Indexes a merchant's entire Shopify catalog as CLIP embeddings in Qdrant — photograph a product from the stockroom and cosine similarity search finds the match instantly
+For unmatched products, GPT-4o generates a title, description, and tags from the image and publishes the listing directly via Shopify Admin GraphQL
+Evaluated against a held-out test set with augmented images, precision@5 above 0.80 and catalog coverage above 0.75</p>
+          <a class="project-link" href="https://github.com/saswath-06/visualshelf" target="_blank" rel="noopener"><span>Github</span> <span class="arr">↗</span></a>
+        </div>
+      </li>
+      <li class="project" data-parallax>
+        <span class="project-num">004</span>
+        <div class="project-visual" aria-hidden="true">
+          <div class="pv-blob pv-blob--f"></div>
+          <div class="pv-grid"></div>
+          <span class="pv-tag">SCIKIT-LEARN · AZURE · POSTGRESQL · REDIS · FASTAPI</span>
+        </div>
+        <div class="project-text">
+          <span class="project-year">FEB 2026</span>
+          <h3 class="project-title">PR Risk Intelligence Platform</h3>
+          <p class="project-desc">Engineering teams find out a PR is stuck after it's already been sitting for three days. This flags it before it stalls.
+
+3 decoupled Python microservices on Azure Container Apps ingest 500+ daily GitHub webhook events, deduplicate via Redis, and aggregate PR lifecycle metrics in PostgreSQL
+Gradient boosting classifier trained on 10,000+ GitHub events predicts merge time risk at 82% accuracy, with features including review assignment lag, code churn, and author velocity
+At-risk PRs surface in a React TypeScript dashboard before bottlenecks happen, not after</p>
+          <a class="project-link" href="https://github.com/saswath-06/Developer-Intelligence-Dashboard" target="_blank" rel="noopener"><span>Github</span> <span class="arr">↗</span></a>
+        </div>
+      </li>
+    </ol>
+  </div>
+</section>
+
+<!-- ============ CONTACT ============ -->
+<section class="section section--contact" id="contact" data-screen-label="Contact">
+  <div class="contact-pin">
+    <div class="contact-sticky">
+      <header class="section-head" data-reveal>
+        <span class="section-label">04 — contact</span>
+        <span class="section-rule"></span>
+      </header>
+
+      <div class="contact-stage">
+        <p class="contact-prelude" data-reveal>Let's make something —</p>
+        <a class="contact-email" id="contactEmail" href="mailto:hello@saswath.dev">
+          <span class="ce-line">s2yeshwa</span><span class="ce-at">@</span><span class="ce-line">uwaterloo.ca</span>
+        </a>
+      </div>
+
+      <ul class="contact-links">
+        <li data-reveal><a href="https://github.com/saswath-06" target="_blank" rel="noopener"><span class="cl-label">Github</span> <span class="cl-handle">@saswath-06</span> <span class="cl-arr">↗</span></a></li>
+        <li data-reveal><a href="https://www.linkedin.com/in/saswath-yeshwanth/" target="_blank" rel="noopener"><span class="cl-label">LinkedIn</span> <span class="cl-handle">/in/saswath-yeshwanth</span> <span class="cl-arr">↗</span></a></li>
+        <li data-reveal><a href="https://x.com/saswath06?s=21" target="_blank" rel="noopener"><span class="cl-label">Twitter</span> <span class="cl-handle">@saswath06</span> <span class="cl-arr">↗</span></a></li>
+      </ul>
+
+      <footer class="site-foot">
+        <span>© 2026 Saswath Yeshwanth</span>
+      </footer>
+    </div>
+  </div>
+</section>
+
+<!-- Tweaks panel -->
+<div class="tweaks" id="tweaksPanel">
+  <h3>Tweaks</h3>
+
+  <div class="row">
+    <label>Name</label>
+    <input type="text" id="t_name" />
+  </div>
+
+  <div class="row">
+    <label>Tagline</label>
+    <input type="text" id="t_tagline" />
+  </div>
+
+  <div class="row">
+    <label>Spline scene URL (.splinecode)</label>
+    <input type="url" id="t_spline" placeholder="https://prod.spline.design/…/scene.splinecode" />
+  </div>
+
+  <div class="row">
+    <label>Theme</label>
+    <div class="theme-row">
+      <button data-theme="light">Light</button>
+      <button data-theme="dark">Dark</button>
+      <button data-theme="warm">Warm</button>
+      <button data-theme="mono">Mono</button>
+    </div>
+  </div>
+
+  <div class="row">
+    <label>Name size <span class="val" id="v_nameSize"></span></label>
+    <input type="range" id="t_nameSize" min="8" max="28" step="0.5" />
+  </div>
+
+  <div class="row">
+    <label>Grain <span class="val" id="v_grain"></span></label>
+    <input type="range" id="t_grain" min="0" max="1" step="0.05" />
+  </div>
+
+  <div class="row">
+    <label>Vignette <span class="val" id="v_vignette"></span></label>
+    <input type="range" id="t_vignette" min="0" max="0.5" step="0.02" />
+  </div>
+
+  <div class="row" style="display:flex;flex-direction:row;align-items:center;justify-content:space-between;gap:8px;">
+    <label style="margin:0">Paint trail</label>
+    <input type="checkbox" id="t_paintEnabled" />
+  </div>
+  <div class="row">
+    <label>Paint hue <span class="val" id="v_paintHue"></span></label>
+    <input type="range" id="t_paintHue" min="0" max="360" step="1" />
+  </div>
+  <div class="row">
+    <label>Paint intensity <span class="val" id="v_paintIntensity"></span></label>
+    <input type="range" id="t_paintIntensity" min="0" max="1.4" step="0.05" />
+  </div>
+  <div class="row">
+    <label>Paint size <span class="val" id="v_paintSize"></span></label>
+    <input type="range" id="t_paintSize" min="20" max="180" step="2" />
+  </div>
+</div>
+
+<script>
+  // ---------------- State ----------------
+  let state = { ...TWEAK_DEFAULTS };
+
+  const THEMES = {
+    light: { bg: '#e8e8e6', fg: '#0a0a0a' },
+    dark:  { bg: '#0e0e10', fg: '#f0efe9' },
+    warm:  { bg: '#efe8dd', fg: '#1a1612' },
+    mono:  { bg: '#ffffff', fg: '#000000' }
+  };
+
+  // ---------------- Apply state to DOM ----------------
+  function applyState() {
+    const root = document.documentElement;
+    const theme = THEMES[state.theme] || THEMES.light;
+    root.style.setProperty('--bg', theme.bg);
+    root.style.setProperty('--fg', theme.fg);
+    root.style.setProperty('--muted', theme.theme === 'dark'
+      ? 'rgba(240,239,233,0.5)'
+      : `color-mix(in oklab, ${theme.fg} 50%, transparent)`);
+    root.style.setProperty('--name-size', `clamp(60px, ${state.nameSize}vw, 320px)`);
+    root.style.setProperty('--grain-opacity', state.grain);
+    root.style.setProperty('--vignette-opacity', state.vignette);
+
+    renderName(state.name || 'your name');
+    document.getElementById('taglineEl').textContent = state.tagline || '';
+
+    // Update tweak inputs if panel is populated
+    const tn = document.getElementById('t_name'); if (tn) tn.value = state.name;
+    const tt = document.getElementById('t_tagline'); if (tt) tt.value = state.tagline;
+    const ts = document.getElementById('t_spline'); if (ts) ts.value = state.splineUrl;
+    const ns = document.getElementById('t_nameSize'); if (ns) { ns.value = state.nameSize; document.getElementById('v_nameSize').textContent = state.nameSize + 'vw'; }
+    const tg = document.getElementById('t_grain'); if (tg) { tg.value = state.grain; document.getElementById('v_grain').textContent = state.grain; }
+    const tv = document.getElementById('t_vignette'); if (tv) { tv.value = state.vignette; document.getElementById('v_vignette').textContent = state.vignette; }
+    document.body.setAttribute('data-theme', state.theme || 'light');
+    if (window.__updatePaint) {
+      window.__updatePaint({
+        enabled: state.paintEnabled !== false,
+        baseHue: state.paintHue ?? 268,
+        intensity: state.paintIntensity ?? 0.75,
+        size: state.paintSize ?? 70
+      });
+    }
+    const tpe = document.getElementById('t_paintEnabled'); if (tpe) tpe.checked = state.paintEnabled !== false;
+    const tph = document.getElementById('t_paintHue'); if (tph) { tph.value = state.paintHue; document.getElementById('v_paintHue').textContent = state.paintHue + '°'; }
+    const tpi = document.getElementById('t_paintIntensity'); if (tpi) { tpi.value = state.paintIntensity; document.getElementById('v_paintIntensity').textContent = state.paintIntensity; }
+    const tps = document.getElementById('t_paintSize'); if (tps) { tps.value = state.paintSize; document.getElementById('v_paintSize').textContent = state.paintSize + 'px'; }
+    document.querySelectorAll('.theme-row button').forEach(b => {
+      b.classList.toggle('active', b.dataset.theme === state.theme);
+    });
+
+    mountSpline(state.splineUrl);
+  }
+
+  // ---------------- Name rendering (staggered chars) ----------------
+  function renderName(text) {
+    const el = document.getElementById('nameEl');
+    el.setAttribute('aria-label', text.replace(/\n/g, ' '));
+    el.innerHTML = '';
+    let i = 0;
+    [...text].forEach((ch) => {
+      if (ch === '\n') {
+        el.appendChild(document.createElement('br'));
+        return;
+      }
+      const s = document.createElement('span');
+      s.className = 'char';
+      s.textContent = ch === ' ' ? '\u00a0' : ch;
+      s.style.animationDelay = (0.3 + i * 0.04) + 's';
+      el.appendChild(s);
+      i++;
+    });
+  }
+
+  // ---------------- Spline mount ----------------
+  let currentSplineUrl = null;
+  function mountSpline(url) {
+    const layer = document.getElementById('splineLayer');
+    const loader = document.getElementById('loader');
+
+    if (!url || url.trim() === '') {
+      layer.innerHTML = `
+        <div class="placeholder">
+          <div class="ph-card">
+            <b>Drop your Spline scene URL</b>
+            <span class="hint">Enable Tweaks → paste a .splinecode URL. Your robot (or anything else) will appear here, in front of the name.</span>
+          </div>
+        </div>`;
+      loader.classList.add('hidden');
+      layer.classList.add('ready');
+      currentSplineUrl = null;
+      return;
+    }
+
+    if (url === currentSplineUrl) return;
+    currentSplineUrl = url;
+
+    layer.innerHTML = '';
+    layer.classList.remove('ready');
+    loader.classList.remove('hidden');
+
+    const viewer = document.createElement('spline-viewer');
+    const bustUrl = url + (url.includes('?') ? '&' : '?') + '_cb=' + Date.now();
+    viewer.setAttribute('url', bustUrl);
+    viewer.setAttribute('loading-anim-type', 'none');
+    viewer.style.width = '100%';
+    viewer.style.height = '100%';
+    viewer.style.padding = '0px';
+    viewer.style.margin = '0px';
+    viewer.style.borderWidth = '0px';
+    const fixCanvas = () => {
+      try {
+        const sr = viewer.shadowRoot;
+        if (!sr) return false;
+        if (!sr.querySelector('#__fix_canvas_size')) {
+          const s = document.createElement('style');
+          s.id = '__fix_canvas_size';
+          s.textContent = `
+            #container { width: 100% !important; height: 100% !important; background: transparent !important; }
+            canvas { width: 100% !important; height: 100% !important; display: block !important; background: transparent !important; }
+            /* Hide the "Built with Spline" watermark in every variation we've seen */
+            #logo, a#logo, [id*="logo"], a[href*="spline.design"], div[class*="logo"], div[class*="watermark"] {
+              display: none !important;
+              opacity: 0 !important;
+              visibility: hidden !important;
+              pointer-events: none !important;
+            }
+          `;
+          sr.appendChild(s);
+        }
+        // Also nuke logo nodes directly
+        sr.querySelectorAll('#logo, a[href*="spline.design"], [class*="logo"], [class*="watermark"]').forEach(n => {
+          n.style.display = 'none';
+          n.remove();
+        });
+        const canvas = sr.querySelector('canvas');
+        if (canvas) {
+          const dpr = window.devicePixelRatio || 1;
+          const r = viewer.getBoundingClientRect();
+          if (r.width > 0 && r.height > 0) {
+            canvas.width = Math.round(r.width * dpr);
+            canvas.height = Math.round(r.height * dpr);
+          }
+        }
+        return true;
+      } catch (e) { return false; }
+    };
+    // Poll until the scene is ready, then keep syncing
+    let tries = 0;
+    const poll = setInterval(() => {
+      fixCanvas();
+      window.dispatchEvent(new Event('resize'));
+      tries++;
+      if (tries > 40) clearInterval(poll); // stop after ~10s
+    }, 250);
+    viewer.addEventListener('load', () => {
+      loader.classList.add('hidden');
+      layer.classList.add('ready');
+      fixCanvas();
+    });
+    // Fallback: always reveal after a moment
+    setTimeout(() => { loader.classList.add('hidden'); layer.classList.add('ready'); fixCanvas(); }, 1500);
+    if (window.ResizeObserver) {
+      const ro = new ResizeObserver(() => { window.dispatchEvent(new Event('resize')); fixCanvas(); });
+      ro.observe(viewer);
+    }
+    // Fallback: hide loader after 8s regardless
+    setTimeout(() => {
+      loader.classList.add('hidden');
+      layer.classList.add('ready');
+    }, 8000);
+
+    layer.appendChild(viewer);
+  }
+
+  // ---------------- Clock ----------------
+  function tickClock() {
+    const d = new Date();
+    const pad = n => String(n).padStart(2, '0');
+    document.getElementById('clock').textContent =
+      `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())} LOCAL`;
+  }
+  setInterval(tickClock, 1000); tickClock();
+
+  // ---------------- Tweaks integration ----------------
+  function persist(edits) {
+    Object.assign(state, edits);
+    applyState();
+    window.parent.postMessage({ type: '__edit_mode_set_keys', edits }, '*');
+  }
+
+  function bindTweaks() {
+    document.getElementById('t_name').addEventListener('input', e => persist({ name: e.target.value }));
+    document.getElementById('t_tagline').addEventListener('input', e => persist({ tagline: e.target.value }));
+    document.getElementById('t_spline').addEventListener('change', e => persist({ splineUrl: e.target.value.trim() }));
+    document.getElementById('t_nameSize').addEventListener('input', e => persist({ nameSize: parseFloat(e.target.value) }));
+    document.getElementById('t_grain').addEventListener('input', e => persist({ grain: parseFloat(e.target.value) }));
+    document.getElementById('t_vignette').addEventListener('input', e => persist({ vignette: parseFloat(e.target.value) }));
+    document.getElementById('t_paintEnabled').addEventListener('change', e => persist({ paintEnabled: e.target.checked }));
+    document.getElementById('t_paintHue').addEventListener('input', e => persist({ paintHue: parseInt(e.target.value) }));
+    document.getElementById('t_paintIntensity').addEventListener('input', e => persist({ paintIntensity: parseFloat(e.target.value) }));
+    document.getElementById('t_paintSize').addEventListener('input', e => persist({ paintSize: parseInt(e.target.value) }));
+    document.querySelectorAll('.theme-row button').forEach(b => {
+      b.addEventListener('click', () => persist({ theme: b.dataset.theme }));
+    });
+  }
+
+  // Edit mode wiring — LISTENER FIRST, then announce availability
+  window.addEventListener('message', (ev) => {
+    const d = ev.data || {};
+    if (d.type === '__activate_edit_mode') {
+      document.getElementById('tweaksPanel').classList.add('open');
+    } else if (d.type === '__deactivate_edit_mode') {
+      document.getElementById('tweaksPanel').classList.remove('open');
+    }
+  });
+  window.parent.postMessage({ type: '__edit_mode_available' }, '*');
+
+  // ---------------- Init ----------------
+  bindTweaks();
+  applyState();
+</script>
+
+<!-- ============ SCROLL CHOREOGRAPHY ============ -->
+<script>
+(function() {
+  // ---- Convert multi-line descriptions into bulleted lists (work + projects) ----
+  document.querySelectorAll('p.wc-desc, p.project-desc').forEach(p => {
+    const raw = p.textContent.trim();
+    const lines = raw.split(/\r?\n+/).map(s => s.trim()).filter(Boolean);
+    if (lines.length < 2) return;
+    const ul = document.createElement('ul');
+    ul.className = p.className + ' is-list';
+    lines.forEach(text => {
+      const li = document.createElement('li');
+      li.textContent = text;
+      ul.appendChild(li);
+    });
+    p.replaceWith(ul);
+  });
+
+  // ---- IntersectionObserver: simple reveal-on-enter ----
+  const io = new IntersectionObserver((entries) => {
+    entries.forEach(e => {
+      if (e.isIntersecting) {
+        e.target.classList.add('is-in');
+        // stagger children within a reveal block
+        const children = e.target.querySelectorAll('[data-reveal]');
+        children.forEach((c, i) => {
+          c.style.setProperty('--reveal-delay', (i * 60) + 'ms');
+        });
+      }
+    });
+  }, { threshold: 0.15, rootMargin: '0px 0px -8% 0px' });
+  document.querySelectorAll('[data-reveal]').forEach(el => io.observe(el));
+
+  // Stagger every child reveal within sections automatically
+  document.querySelectorAll('.about-grid-list [data-reveal], .contact-links [data-reveal]').forEach((el, i) => {
+    el.style.setProperty('--reveal-delay', (i * 80) + 'ms');
+  });
+
+  // ---- Word-by-word manifesto reveal ----
+  document.querySelectorAll('[data-reveal-words]').forEach(el => {
+    // Wrap each word in a span. Preserve <em>, <strong> etc by walking text nodes.
+    const wrap = (node) => {
+      if (node.nodeType === 3) {
+        const frag = document.createDocumentFragment();
+        const parts = node.textContent.split(/(\s+)/);
+        parts.forEach(part => {
+          if (/^\s+$/.test(part)) {
+            frag.appendChild(document.createTextNode(part));
+          } else if (part.length) {
+            const s = document.createElement('span');
+            s.className = 'word';
+            s.textContent = part;
+            frag.appendChild(s);
+          }
+        });
+        node.parentNode.replaceChild(frag, node);
+      } else if (node.nodeType === 1 && node.childNodes.length) {
+        [...node.childNodes].forEach(wrap);
+      }
+    };
+    wrap(el);
+
+    const words = el.querySelectorAll('.word');
+    const wordIO = new IntersectionObserver((entries) => {
+      entries.forEach(e => {
+        if (e.isIntersecting) {
+          // Stagger reveal
+          words.forEach((w, i) => {
+            setTimeout(() => w.classList.add('is-in'), i * 30);
+          });
+          wordIO.disconnect();
+        }
+      });
+    }, { threshold: 0.2 });
+    wordIO.observe(el);
+  });
+
+  // ---- rAF scroll loop for continuous, per-element progress ----
+  let ticking = false;
+  let lastScroll = 0;
+
+  const projects = [...document.querySelectorAll('.project')];
+  const workPin = document.querySelector('.work-pin');
+  const workTrack = document.getElementById('workTrack');
+  const workFill = document.getElementById('workFill');
+  const contactPin = document.querySelector('.contact-pin');
+  const contactStage = document.querySelector('.contact-stage');
+  const portrait = document.querySelector('.portrait-card');
+
+  // Cache for layout measurements (recomputed on resize/load)
+  let cache = null;
+  function measure() {
+    const vh = window.innerHeight;
+    cache = {
+      vh,
+      projects: projects.map(el => {
+        const r = el.getBoundingClientRect();
+        const top = r.top + window.scrollY;
+        return { el, top, h: r.height };
+      }),
+      workPin: workPin ? (() => {
+        const r = workPin.getBoundingClientRect();
+        return { top: r.top + window.scrollY, h: r.height };
+      })() : null,
+      workTrackWidth: workTrack ? (workTrack.scrollWidth - workTrack.clientWidth) : 0,
+      contactPin: contactPin ? (() => {
+        const r = contactPin.getBoundingClientRect();
+        return { top: r.top + window.scrollY, h: r.height };
+      })() : null
+    };
+  }
+  window.addEventListener('resize', () => { measure(); });
+  window.addEventListener('load', measure);
+  measure();
+  // Re-measure shortly after to catch any post-mount layout (fonts, Spline)
+  setTimeout(measure, 400);
+  setTimeout(measure, 1200);
+
+  function clamp01(v) { return Math.max(0, Math.min(1, v)); }
+
+  function update() {
+    ticking = false;
+    if (!cache) return;
+    const y = window.scrollY;
+    const vh = cache.vh;
+
+    // --- Per-project progress: 0 when bottom of viewport hits top of card, 1 when top of viewport passes its bottom.
+    cache.projects.forEach(({ el, top, h }) => {
+      // progress: how far the card has traveled through the viewport (0 at entry, 1 at exit-center)
+      const start = top - vh * 0.9;
+      const end = top - vh * 0.15;
+      const p = clamp01((y - start) / (end - start));
+      // Ease for nicer arrival
+      const eased = 1 - Math.pow(1 - p, 2.4);
+      el.style.setProperty('--p', eased.toFixed(3));
+    });
+
+    // --- Work: pinned horizontal scroll
+    if (cache.workPin && workTrack) {
+      const { top, h } = cache.workPin;
+      const scrollable = h - vh; // total scrollable distance while pinned
+      const localY = y - top;
+      const p = clamp01(localY / scrollable);
+      const dx = -p * cache.workTrackWidth;
+      workTrack.style.transform = `translate3d(${dx}px, 0, 0)`;
+      if (workFill) workFill.style.width = (p * 100).toFixed(2) + '%';
+    }
+
+    // --- Contact: scale up email as we enter pinned section
+    if (cache.contactPin && contactStage) {
+      const { top, h } = cache.contactPin;
+      const scrollable = h - vh;
+      const localY = y - top;
+      const p = clamp01(localY / scrollable);
+      // Ease the growth
+      const eased = Math.pow(p, 0.7);
+      contactStage.style.setProperty('--cp', eased.toFixed(3));
+    }
+
+    lastScroll = y;
+  }
+
+  function onScroll() {
+    if (!ticking) {
+      ticking = true;
+      requestAnimationFrame(update);
+    }
+  }
+  window.addEventListener('scroll', onScroll, { passive: true });
+  update();
+
+  // ---- Portrait tilt on mouse move ----
+  if (portrait) {
+    let rx = 0, ry = 0, trx = 0, try_ = 0;
+    document.addEventListener('mousemove', (e) => {
+      const r = portrait.getBoundingClientRect();
+      const cx = r.left + r.width / 2;
+      const cy = r.top + r.height / 2;
+      const dx = (e.clientX - cx) / window.innerWidth;
+      const dy = (e.clientY - cy) / window.innerHeight;
+      try_ = dx * 8;        // y rotation follows x distance
+      trx = -dy * 8;        // x rotation inverse of y
+    }, { passive: true });
+    (function tick() {
+      requestAnimationFrame(tick);
+      rx += (trx - rx) * 0.08;
+      ry += (try_ - ry) * 0.08;
+      portrait.style.transform = `perspective(800px) rotateX(${rx.toFixed(2)}deg) rotateY(${ry.toFixed(2)}deg)`;
+    })();
+  }
+})();
+</script>
+
+<!-- ============ PAINT TRAIL — WebGL fluid simulation (Navier-Stokes splash cursor) ============ -->
+<script>
+(function() {
+  const canvas = document.getElementById('paintTrail');
+  if (!canvas) return;
+
+  // ---- Public config (tweakable) ----
+  window.__paint = window.__paint || {
+    enabled: true,
+    baseHue: 268,
+    intensity: 0.75,
+    size: 70
+  };
+
+  // ---- Fluid sim configuration ----
+  // Tuned for "ink dispersing in still water" rather than the default splashy SplashCursor feel:
+  //  - Velocity persists much longer (still water carries currents)
+  //  - Dye fades faster relative to velocity (ink thins out as it spreads)
+  //  - Higher curl produces longer, more elegant tendrils at the slow speed
+  //  - Gentler splat force — cursor "dips" instead of "slaps"
+  //  - Higher pressure for a more incompressible, water-like response
+  let config = {
+    SIM_RESOLUTION: 128,
+    DYE_RESOLUTION: 1024,
+    DENSITY_DISSIPATION: 1.6,       // was 3.5 — ink lingers, thins gradually
+    VELOCITY_DISSIPATION: 0.35,     // was 2.0   — currents persist, slow drift
+    PRESSURE: 0.55,                 // was 0.1   — more incompressible / fluid-like
+    PRESSURE_ITERATIONS: 22,
+    CURL: 9,                        // was 3     — lazier, more sinuous tendrils
+    SPLAT_RADIUS: 0.26,             // was 0.2
+    SPLAT_FORCE: 3200,              // was 6000  — gentler injection
+    SHADING: true,
+    COLOR_UPDATE_SPEED: 6           // was 10    — color drifts more slowly
+  };
+
+  function pointerPrototype() {
+    this.id = -1;
+    this.texcoordX = 0;
+    this.texcoordY = 0;
+    this.prevTexcoordX = 0;
+    this.prevTexcoordY = 0;
+    this.deltaX = 0;
+    this.deltaY = 0;
+    this.down = false;
+    this.moved = false;
+    this.color = { r: 0, g: 0, b: 0 };
+  }
+  let pointers = [new pointerPrototype()];
+
+  // ---- WebGL context + extensions ----
+  function getWebGLContext(canvas) {
+    const params = { alpha: true, depth: false, stencil: false, antialias: false, preserveDrawingBuffer: false };
+    let gl = canvas.getContext('webgl2', params);
+    const isWebGL2 = !!gl;
+    if (!isWebGL2)
+      gl = canvas.getContext('webgl', params) || canvas.getContext('experimental-webgl', params);
+    let halfFloat, supportLinearFiltering;
+    if (isWebGL2) {
+      gl.getExtension('EXT_color_buffer_float');
+      supportLinearFiltering = gl.getExtension('OES_texture_float_linear');
+    } else {
+      halfFloat = gl.getExtension('OES_texture_half_float');
+      supportLinearFiltering = gl.getExtension('OES_texture_half_float_linear');
+    }
+    gl.clearColor(0, 0, 0, 1);
+    const halfFloatTexType = isWebGL2 ? gl.HALF_FLOAT : (halfFloat && halfFloat.HALF_FLOAT_OES);
+    let formatRGBA, formatRG, formatR;
+    if (isWebGL2) {
+      formatRGBA = getSupportedFormat(gl, gl.RGBA16F, gl.RGBA, halfFloatTexType);
+      formatRG = getSupportedFormat(gl, gl.RG16F, gl.RG, halfFloatTexType);
+      formatR = getSupportedFormat(gl, gl.R16F, gl.RED, halfFloatTexType);
+    } else {
+      formatRGBA = getSupportedFormat(gl, gl.RGBA, gl.RGBA, halfFloatTexType);
+      formatRG = getSupportedFormat(gl, gl.RGBA, gl.RGBA, halfFloatTexType);
+      formatR = getSupportedFormat(gl, gl.RGBA, gl.RGBA, halfFloatTexType);
+    }
+    return { gl, ext: { formatRGBA, formatRG, formatR, halfFloatTexType, supportLinearFiltering } };
+  }
+  function getSupportedFormat(gl, internalFormat, format, type) {
+    if (!supportRenderTextureFormat(gl, internalFormat, format, type)) {
+      switch (internalFormat) {
+        case gl.R16F:  return getSupportedFormat(gl, gl.RG16F, gl.RG, type);
+        case gl.RG16F: return getSupportedFormat(gl, gl.RGBA16F, gl.RGBA, type);
+        default: return null;
+      }
+    }
+    return { internalFormat, format };
+  }
+  function supportRenderTextureFormat(gl, internalFormat, format, type) {
+    const tex = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_2D, tex);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    gl.texImage2D(gl.TEXTURE_2D, 0, internalFormat, 4, 4, 0, format, type, null);
+    const fbo = gl.createFramebuffer();
+    gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
+    gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, tex, 0);
+    return gl.checkFramebufferStatus(gl.FRAMEBUFFER) === gl.FRAMEBUFFER_COMPLETE;
+  }
+
+  const ctxOut = getWebGLContext(canvas);
+  const gl = ctxOut.gl;
+  const ext = ctxOut.ext;
+  if (!ext.supportLinearFiltering) {
+    config.DYE_RESOLUTION = 256;
+    config.SHADING = false;
+  }
+
+  // ---- Shaders / programs ----
+  function hashCode(s) { let h = 0; for (let i = 0; i < s.length; i++) { h = (h << 5) - h + s.charCodeAt(i); h |= 0; } return h; }
+  function addKeywords(source, keywords) {
+    if (!keywords) return source;
+    return keywords.map(k => '#define ' + k + '\n').join('') + source;
+  }
+  function compileShader(type, source, keywords) {
+    source = addKeywords(source, keywords);
+    const s = gl.createShader(type);
+    gl.shaderSource(s, source);
+    gl.compileShader(s);
+    if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) console.warn(gl.getShaderInfoLog(s));
+    return s;
+  }
+  function createProgram(vs, fs) {
+    const p = gl.createProgram();
+    gl.attachShader(p, vs); gl.attachShader(p, fs); gl.linkProgram(p);
+    if (!gl.getProgramParameter(p, gl.LINK_STATUS)) console.warn(gl.getProgramInfoLog(p));
+    return p;
+  }
+  function getUniforms(program) {
+    const u = {};
+    const n = gl.getProgramParameter(program, gl.ACTIVE_UNIFORMS);
+    for (let i = 0; i < n; i++) {
+      const name = gl.getActiveUniform(program, i).name;
+      u[name] = gl.getUniformLocation(program, name);
+    }
+    return u;
+  }
+  class Material {
+    constructor(vs, fsSource) { this.vs = vs; this.fsSource = fsSource; this.programs = []; this.activeProgram = null; this.uniforms = []; }
+    setKeywords(keywords) {
+      let hash = 0;
+      for (const k of keywords) hash += hashCode(k);
+      let program = this.programs[hash];
+      if (program == null) {
+        const fs = compileShader(gl.FRAGMENT_SHADER, this.fsSource, keywords);
+        program = createProgram(this.vs, fs);
+        this.programs[hash] = program;
+      }
+      if (program === this.activeProgram) return;
+      this.uniforms = getUniforms(program);
+      this.activeProgram = program;
+    }
+    bind() { gl.useProgram(this.activeProgram); }
+  }
+  class Program {
+    constructor(vs, fs) { this.program = createProgram(vs, fs); this.uniforms = getUniforms(this.program); }
+    bind() { gl.useProgram(this.program); }
+  }
+
+  const baseVS = compileShader(gl.VERTEX_SHADER, `
+    precision highp float;
+    attribute vec2 aPosition;
+    varying vec2 vUv, vL, vR, vT, vB;
+    uniform vec2 texelSize;
+    void main () {
+      vUv = aPosition * 0.5 + 0.5;
+      vL = vUv - vec2(texelSize.x, 0.0);
+      vR = vUv + vec2(texelSize.x, 0.0);
+      vT = vUv + vec2(0.0, texelSize.y);
+      vB = vUv - vec2(0.0, texelSize.y);
+      gl_Position = vec4(aPosition, 0.0, 1.0);
+    }
+  `);
+  const copyFS = compileShader(gl.FRAGMENT_SHADER, `
+    precision mediump float; precision mediump sampler2D;
+    varying highp vec2 vUv; uniform sampler2D uTexture;
+    void main () { gl_FragColor = texture2D(uTexture, vUv); }
+  `);
+  const clearFS = compileShader(gl.FRAGMENT_SHADER, `
+    precision mediump float; precision mediump sampler2D;
+    varying highp vec2 vUv; uniform sampler2D uTexture; uniform float value;
+    void main () { gl_FragColor = value * texture2D(uTexture, vUv); }
+  `);
+  const displayFSSource = `
+    precision highp float; precision highp sampler2D;
+    varying vec2 vUv, vL, vR, vT, vB;
+    uniform sampler2D uTexture; uniform vec2 texelSize;
+    void main () {
+      vec3 c = texture2D(uTexture, vUv).rgb;
+      #ifdef SHADING
+        vec3 lc = texture2D(uTexture, vL).rgb;
+        vec3 rc = texture2D(uTexture, vR).rgb;
+        vec3 tc = texture2D(uTexture, vT).rgb;
+        vec3 bc = texture2D(uTexture, vB).rgb;
+        float dx = length(rc) - length(lc);
+        float dy = length(tc) - length(bc);
+        vec3 n = normalize(vec3(dx, dy, length(texelSize)));
+        vec3 l = vec3(0.0, 0.0, 1.0);
+        float diffuse = clamp(dot(n, l) + 0.7, 0.7, 1.0);
+        c *= diffuse;
+      #endif
+      float a = max(c.r, max(c.g, c.b));
+      gl_FragColor = vec4(c, a);
+    }
+  `;
+  const splatFS = compileShader(gl.FRAGMENT_SHADER, `
+    precision highp float; precision highp sampler2D;
+    varying vec2 vUv;
+    uniform sampler2D uTarget; uniform float aspectRatio;
+    uniform vec3 color; uniform vec2 point; uniform float radius;
+    void main () {
+      vec2 p = vUv - point.xy; p.x *= aspectRatio;
+      vec3 splat = exp(-dot(p, p) / radius) * color;
+      vec3 base = texture2D(uTarget, vUv).xyz;
+      gl_FragColor = vec4(base + splat, 1.0);
+    }
+  `);
+  const advectionFS = compileShader(gl.FRAGMENT_SHADER, `
+    precision highp float; precision highp sampler2D;
+    varying vec2 vUv;
+    uniform sampler2D uVelocity; uniform sampler2D uSource;
+    uniform vec2 texelSize; uniform vec2 dyeTexelSize;
+    uniform float dt; uniform float dissipation;
+    vec4 bilerp (sampler2D sam, vec2 uv, vec2 tsize) {
+      vec2 st = uv / tsize - 0.5;
+      vec2 iuv = floor(st); vec2 fuv = fract(st);
+      vec4 a = texture2D(sam, (iuv + vec2(0.5, 0.5)) * tsize);
+      vec4 b = texture2D(sam, (iuv + vec2(1.5, 0.5)) * tsize);
+      vec4 c = texture2D(sam, (iuv + vec2(0.5, 1.5)) * tsize);
+      vec4 d = texture2D(sam, (iuv + vec2(1.5, 1.5)) * tsize);
+      return mix(mix(a, b, fuv.x), mix(c, d, fuv.x), fuv.y);
+    }
+    void main () {
+      #ifdef MANUAL_FILTERING
+        vec2 coord = vUv - dt * bilerp(uVelocity, vUv, texelSize).xy * texelSize;
+        vec4 result = bilerp(uSource, coord, dyeTexelSize);
+      #else
+        vec2 coord = vUv - dt * texture2D(uVelocity, vUv).xy * texelSize;
+        vec4 result = texture2D(uSource, coord);
+      #endif
+      float decay = 1.0 + dissipation * dt;
+      gl_FragColor = result / decay;
+    }
+  `, ext.supportLinearFiltering ? null : ['MANUAL_FILTERING']);
+  const divergenceFS = compileShader(gl.FRAGMENT_SHADER, `
+    precision mediump float; precision mediump sampler2D;
+    varying highp vec2 vUv, vL, vR, vT, vB;
+    uniform sampler2D uVelocity;
+    void main () {
+      float L = texture2D(uVelocity, vL).x;
+      float R = texture2D(uVelocity, vR).x;
+      float T = texture2D(uVelocity, vT).y;
+      float B = texture2D(uVelocity, vB).y;
+      vec2 C = texture2D(uVelocity, vUv).xy;
+      if (vL.x < 0.0) { L = -C.x; }
+      if (vR.x > 1.0) { R = -C.x; }
+      if (vT.y > 1.0) { T = -C.y; }
+      if (vB.y < 0.0) { B = -C.y; }
+      float div = 0.5 * (R - L + T - B);
+      gl_FragColor = vec4(div, 0.0, 0.0, 1.0);
+    }
+  `);
+  const curlFS = compileShader(gl.FRAGMENT_SHADER, `
+    precision mediump float; precision mediump sampler2D;
+    varying highp vec2 vUv, vL, vR, vT, vB;
+    uniform sampler2D uVelocity;
+    void main () {
+      float L = texture2D(uVelocity, vL).y;
+      float R = texture2D(uVelocity, vR).y;
+      float T = texture2D(uVelocity, vT).x;
+      float B = texture2D(uVelocity, vB).x;
+      float vorticity = R - L - T + B;
+      gl_FragColor = vec4(0.5 * vorticity, 0.0, 0.0, 1.0);
+    }
+  `);
+  const vorticityFS = compileShader(gl.FRAGMENT_SHADER, `
+    precision highp float; precision highp sampler2D;
+    varying vec2 vUv, vL, vR, vT, vB;
+    uniform sampler2D uVelocity; uniform sampler2D uCurl;
+    uniform float curl; uniform float dt;
+    void main () {
+      float L = texture2D(uCurl, vL).x;
+      float R = texture2D(uCurl, vR).x;
+      float T = texture2D(uCurl, vT).x;
+      float B = texture2D(uCurl, vB).x;
+      float C = texture2D(uCurl, vUv).x;
+      vec2 force = 0.5 * vec2(abs(T) - abs(B), abs(R) - abs(L));
+      force /= length(force) + 0.0001;
+      force *= curl * C;
+      force.y *= -1.0;
+      vec2 velocity = texture2D(uVelocity, vUv).xy;
+      velocity += force * dt;
+      velocity = min(max(velocity, -1000.0), 1000.0);
+      gl_FragColor = vec4(velocity, 0.0, 1.0);
+    }
+  `);
+  const pressureFS = compileShader(gl.FRAGMENT_SHADER, `
+    precision mediump float; precision mediump sampler2D;
+    varying highp vec2 vUv, vL, vR, vT, vB;
+    uniform sampler2D uPressure; uniform sampler2D uDivergence;
+    void main () {
+      float L = texture2D(uPressure, vL).x;
+      float R = texture2D(uPressure, vR).x;
+      float T = texture2D(uPressure, vT).x;
+      float B = texture2D(uPressure, vB).x;
+      float divergence = texture2D(uDivergence, vUv).x;
+      float pressure = (L + R + B + T - divergence) * 0.25;
+      gl_FragColor = vec4(pressure, 0.0, 0.0, 1.0);
+    }
+  `);
+  const gradSubFS = compileShader(gl.FRAGMENT_SHADER, `
+    precision mediump float; precision mediump sampler2D;
+    varying highp vec2 vUv, vL, vR, vT, vB;
+    uniform sampler2D uPressure; uniform sampler2D uVelocity;
+    void main () {
+      float L = texture2D(uPressure, vL).x;
+      float R = texture2D(uPressure, vR).x;
+      float T = texture2D(uPressure, vT).x;
+      float B = texture2D(uPressure, vB).x;
+      vec2 velocity = texture2D(uVelocity, vUv).xy;
+      velocity.xy -= vec2(R - L, T - B);
+      gl_FragColor = vec4(velocity, 0.0, 1.0);
+    }
+  `);
+
+  const blit = (() => {
+    gl.bindBuffer(gl.ARRAY_BUFFER, gl.createBuffer());
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1,-1,1,1,1,1,-1]), gl.STATIC_DRAW);
+    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, gl.createBuffer());
+    gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array([0,1,2,0,2,3]), gl.STATIC_DRAW);
+    gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
+    gl.enableVertexAttribArray(0);
+    return (target, clear = false) => {
+      if (target == null) {
+        gl.viewport(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight);
+        gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+      } else {
+        gl.viewport(0, 0, target.width, target.height);
+        gl.bindFramebuffer(gl.FRAMEBUFFER, target.fbo);
+      }
+      if (clear) { gl.clearColor(0,0,0,1); gl.clear(gl.COLOR_BUFFER_BIT); }
+      gl.drawElements(gl.TRIANGLES, 6, gl.UNSIGNED_SHORT, 0);
+    };
+  })();
+
+  let dye, velocity, divergence, curlFBO, pressure;
+  const copyProgram = new Program(baseVS, copyFS);
+  const clearProgram = new Program(baseVS, clearFS);
+  const splatProgram = new Program(baseVS, splatFS);
+  const advectionProgram = new Program(baseVS, advectionFS);
+  const divergenceProgram = new Program(baseVS, divergenceFS);
+  const curlProgram = new Program(baseVS, curlFS);
+  const vorticityProgram = new Program(baseVS, vorticityFS);
+  const pressureProgram = new Program(baseVS, pressureFS);
+  const gradSubProgram = new Program(baseVS, gradSubFS);
+  const displayMaterial = new Material(baseVS, displayFSSource);
+
+  function createFBO(w, h, internalFormat, format, type, param) {
+    gl.activeTexture(gl.TEXTURE0);
+    const tex = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_2D, tex);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, param);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, param);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    gl.texImage2D(gl.TEXTURE_2D, 0, internalFormat, w, h, 0, format, type, null);
+    const fbo = gl.createFramebuffer();
+    gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
+    gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, tex, 0);
+    gl.viewport(0, 0, w, h);
+    gl.clear(gl.COLOR_BUFFER_BIT);
+    return {
+      texture: tex, fbo, width: w, height: h,
+      texelSizeX: 1.0 / w, texelSizeY: 1.0 / h,
+      attach(id) { gl.activeTexture(gl.TEXTURE0 + id); gl.bindTexture(gl.TEXTURE_2D, tex); return id; }
+    };
+  }
+  function createDoubleFBO(w, h, internalFormat, format, type, param) {
+    let fbo1 = createFBO(w, h, internalFormat, format, type, param);
+    let fbo2 = createFBO(w, h, internalFormat, format, type, param);
+    return {
+      width: w, height: h,
+      texelSizeX: fbo1.texelSizeX, texelSizeY: fbo1.texelSizeY,
+      get read() { return fbo1; }, set read(v) { fbo1 = v; },
+      get write() { return fbo2; }, set write(v) { fbo2 = v; },
+      swap() { const t = fbo1; fbo1 = fbo2; fbo2 = t; }
+    };
+  }
+  function resizeFBO(target, w, h, internalFormat, format, type, param) {
+    const nf = createFBO(w, h, internalFormat, format, type, param);
+    copyProgram.bind();
+    gl.uniform1i(copyProgram.uniforms.uTexture, target.attach(0));
+    blit(nf);
+    return nf;
+  }
+  function resizeDoubleFBO(target, w, h, internalFormat, format, type, param) {
+    if (target.width === w && target.height === h) return target;
+    target.read = resizeFBO(target.read, w, h, internalFormat, format, type, param);
+    target.write = createFBO(w, h, internalFormat, format, type, param);
+    target.width = w; target.height = h;
+    target.texelSizeX = 1.0 / w; target.texelSizeY = 1.0 / h;
+    return target;
+  }
+
+  function getResolution(resolution) {
+    let aspect = gl.drawingBufferWidth / gl.drawingBufferHeight;
+    if (aspect < 1) aspect = 1.0 / aspect;
+    const min = Math.round(resolution);
+    const max = Math.round(resolution * aspect);
+    return gl.drawingBufferWidth > gl.drawingBufferHeight
+      ? { width: max, height: min }
+      : { width: min, height: max };
+  }
+
+  function initFramebuffers() {
+    const simRes = getResolution(config.SIM_RESOLUTION);
+    const dyeRes = getResolution(config.DYE_RESOLUTION);
+    const texType = ext.halfFloatTexType;
+    const rgba = ext.formatRGBA, rg = ext.formatRG, r = ext.formatR;
+    const filtering = ext.supportLinearFiltering ? gl.LINEAR : gl.NEAREST;
+    gl.disable(gl.BLEND);
+    if (!dye) dye = createDoubleFBO(dyeRes.width, dyeRes.height, rgba.internalFormat, rgba.format, texType, filtering);
+    else dye = resizeDoubleFBO(dye, dyeRes.width, dyeRes.height, rgba.internalFormat, rgba.format, texType, filtering);
+    if (!velocity) velocity = createDoubleFBO(simRes.width, simRes.height, rg.internalFormat, rg.format, texType, filtering);
+    else velocity = resizeDoubleFBO(velocity, simRes.width, simRes.height, rg.internalFormat, rg.format, texType, filtering);
+    divergence = createFBO(simRes.width, simRes.height, r.internalFormat, r.format, texType, gl.NEAREST);
+    curlFBO = createFBO(simRes.width, simRes.height, r.internalFormat, r.format, texType, gl.NEAREST);
+    pressure = createDoubleFBO(simRes.width, simRes.height, r.internalFormat, r.format, texType, gl.NEAREST);
+  }
+  function updateKeywords() {
+    const kw = [];
+    if (config.SHADING) kw.push('SHADING');
+    displayMaterial.setKeywords(kw);
+  }
+  updateKeywords();
+  initFramebuffers();
+
+  // ---- Helpers ----
+  function scaleByPixelRatio(input) { return Math.floor(input * (window.devicePixelRatio || 1)); }
+  function correctRadius(radius) {
+    const aspect = canvas.width / canvas.height;
+    if (aspect > 1) radius *= aspect;
+    return radius;
+  }
+  function correctDeltaX(d) { const a = canvas.width / canvas.height; if (a < 1) d *= a; return d; }
+  function correctDeltaY(d) { const a = canvas.width / canvas.height; if (a > 1) d /= a; return d; }
+  function HSVtoRGB(h, s, v) {
+    let r, g, b;
+    const i = Math.floor(h * 6), f = h * 6 - i;
+    const p = v * (1 - s), q = v * (1 - f * s), t = v * (1 - (1 - f) * s);
+    switch (i % 6) {
+      case 0: r=v; g=t; b=p; break;
+      case 1: r=q; g=v; b=p; break;
+      case 2: r=p; g=v; b=t; break;
+      case 3: r=p; g=q; b=v; break;
+      case 4: r=t; g=p; b=v; break;
+      case 5: r=v; g=p; b=q; break;
+    }
+    return { r, g, b };
+  }
+  function generateColor() {
+    // Bias hue tightly toward configured baseHue (±18°) so the trail reads as
+    // ONE pigment dispersing in water rather than the rainbow default.
+    // Also vary saturation/value so different droplets feel like ink concentrations.
+    const baseH = ((window.__paint.baseHue % 360) + 360) % 360;
+    const h = ((baseH + (Math.random() - 0.5) * 36) / 360 + 1) % 1;
+    const sat = 0.78 + Math.random() * 0.22;      // 0.78–1.0
+    const val = 0.85 + Math.random() * 0.15;      // 0.85–1.0
+    const c = HSVtoRGB(h, sat, val);
+    // Lower base multiplier than the original 0.15 — deeper, less neon.
+    // Multiply by user intensity so the tweak still scales.
+    const intensity = 0.11 * Math.max(0.1, window.__paint.intensity);
+    c.r *= intensity; c.g *= intensity; c.b *= intensity;
+    return c;
+  }
+  function wrap(value, min, max) { const range = max - min; return range === 0 ? min : ((value - min) % range) + min; }
+
+  // ---- Simulation step ----
+  let colorUpdateTimer = 0;
+  function updateColors(dt) {
+    colorUpdateTimer += dt * config.COLOR_UPDATE_SPEED;
+    if (colorUpdateTimer >= 1) {
+      colorUpdateTimer = wrap(colorUpdateTimer, 0, 1);
+      pointers.forEach(p => p.color = generateColor());
+    }
+  }
+  function splat(x, y, dx, dy, color) {
+    splatProgram.bind();
+    gl.uniform1i(splatProgram.uniforms.uTarget, velocity.read.attach(0));
+    gl.uniform1f(splatProgram.uniforms.aspectRatio, canvas.width / canvas.height);
+    gl.uniform2f(splatProgram.uniforms.point, x, y);
+    gl.uniform3f(splatProgram.uniforms.color, dx, dy, 0);
+    // Map config size (20..180) to splat radius (0.1..0.4)
+    const sizeNorm = (window.__paint.size - 20) / 160;
+    const radius = 0.10 + Math.max(0, Math.min(1, sizeNorm)) * 0.30;
+    gl.uniform1f(splatProgram.uniforms.radius, correctRadius(radius / 100.0));
+    blit(velocity.write); velocity.swap();
+    gl.uniform1i(splatProgram.uniforms.uTarget, dye.read.attach(0));
+    gl.uniform3f(splatProgram.uniforms.color, color.r, color.g, color.b);
+    blit(dye.write); dye.swap();
+  }
+  function splatPointer(pointer) {
+    const dx = pointer.deltaX * config.SPLAT_FORCE;
+    const dy = pointer.deltaY * config.SPLAT_FORCE;
+    splat(pointer.texcoordX, pointer.texcoordY, dx, dy, pointer.color);
+  }
+  function clickSplat(pointer) {
+    // Slightly heavier than a normal move-splat but NOT 10x — a dip of the brush,
+    // not the firehose blast from the original. Two adjacent splats give it
+    // a doubled-up wet drop feel.
+    const c1 = generateColor();
+    c1.r *= 4.5; c1.g *= 4.5; c1.b *= 4.5;
+    const dx = 8 * (Math.random() - 0.5);
+    const dy = 22 * (Math.random() - 0.5);
+    splat(pointer.texcoordX, pointer.texcoordY, dx, dy, c1);
+    // tiny offset second splat — droplet halo
+    const off = 0.012;
+    const c2 = generateColor();
+    c2.r *= 2.5; c2.g *= 2.5; c2.b *= 2.5;
+    splat(
+      pointer.texcoordX + (Math.random() - 0.5) * off,
+      pointer.texcoordY + (Math.random() - 0.5) * off,
+      dx * 0.5, dy * 0.5, c2
+    );
+  }
+  // ---- Ambient drift: occasionally inject tiny invisible currents so the
+  //      fluid has its own quiet motion even when the cursor is still.
+  //      Like ambient air movement in a glass of water.
+  let driftTimer = 0;
+  function ambientDrift(dt) {
+    driftTimer += dt;
+    if (driftTimer < 0.18) return;     // ~5x per second
+    driftTimer = 0;
+    // 50% chance to skip (irregular cadence feels more organic)
+    if (Math.random() < 0.5) return;
+    const x = Math.random();
+    const y = Math.random();
+    // Small directional vector with a slow rotating bias so currents have a sense of flow
+    const t = performance.now() * 0.0002;
+    const angle = t + Math.random() * Math.PI * 2;
+    const mag = 8 + Math.random() * 14;
+    const dx = Math.cos(angle) * mag;
+    const dy = Math.sin(angle) * mag;
+    // Use a near-zero color so this only adds velocity, not visible dye
+    splatProgram.bind();
+    gl.uniform1i(splatProgram.uniforms.uTarget, velocity.read.attach(0));
+    gl.uniform1f(splatProgram.uniforms.aspectRatio, canvas.width / canvas.height);
+    gl.uniform2f(splatProgram.uniforms.point, x, y);
+    gl.uniform3f(splatProgram.uniforms.color, dx, dy, 0);
+    gl.uniform1f(splatProgram.uniforms.radius, correctRadius(0.6 / 100.0));
+    blit(velocity.write); velocity.swap();
+  }
+
+  function applyInputs() {
+    pointers.forEach(p => { if (p.moved) { p.moved = false; splatPointer(p); } });
+  }
+  function step(dt) {
+    gl.disable(gl.BLEND);
+
+    curlProgram.bind();
+    gl.uniform2f(curlProgram.uniforms.texelSize, velocity.texelSizeX, velocity.texelSizeY);
+    gl.uniform1i(curlProgram.uniforms.uVelocity, velocity.read.attach(0));
+    blit(curlFBO);
+
+    vorticityProgram.bind();
+    gl.uniform2f(vorticityProgram.uniforms.texelSize, velocity.texelSizeX, velocity.texelSizeY);
+    gl.uniform1i(vorticityProgram.uniforms.uVelocity, velocity.read.attach(0));
+    gl.uniform1i(vorticityProgram.uniforms.uCurl, curlFBO.attach(1));
+    gl.uniform1f(vorticityProgram.uniforms.curl, config.CURL);
+    gl.uniform1f(vorticityProgram.uniforms.dt, dt);
+    blit(velocity.write); velocity.swap();
+
+    divergenceProgram.bind();
+    gl.uniform2f(divergenceProgram.uniforms.texelSize, velocity.texelSizeX, velocity.texelSizeY);
+    gl.uniform1i(divergenceProgram.uniforms.uVelocity, velocity.read.attach(0));
+    blit(divergence);
+
+    clearProgram.bind();
+    gl.uniform1i(clearProgram.uniforms.uTexture, pressure.read.attach(0));
+    gl.uniform1f(clearProgram.uniforms.value, config.PRESSURE);
+    blit(pressure.write); pressure.swap();
+
+    pressureProgram.bind();
+    gl.uniform2f(pressureProgram.uniforms.texelSize, velocity.texelSizeX, velocity.texelSizeY);
+    gl.uniform1i(pressureProgram.uniforms.uDivergence, divergence.attach(0));
+    for (let i = 0; i < config.PRESSURE_ITERATIONS; i++) {
+      gl.uniform1i(pressureProgram.uniforms.uPressure, pressure.read.attach(1));
+      blit(pressure.write); pressure.swap();
+    }
+
+    gradSubProgram.bind();
+    gl.uniform2f(gradSubProgram.uniforms.texelSize, velocity.texelSizeX, velocity.texelSizeY);
+    gl.uniform1i(gradSubProgram.uniforms.uPressure, pressure.read.attach(0));
+    gl.uniform1i(gradSubProgram.uniforms.uVelocity, velocity.read.attach(1));
+    blit(velocity.write); velocity.swap();
+
+    advectionProgram.bind();
+    gl.uniform2f(advectionProgram.uniforms.texelSize, velocity.texelSizeX, velocity.texelSizeY);
+    if (!ext.supportLinearFiltering)
+      gl.uniform2f(advectionProgram.uniforms.dyeTexelSize, velocity.texelSizeX, velocity.texelSizeY);
+    let vid = velocity.read.attach(0);
+    gl.uniform1i(advectionProgram.uniforms.uVelocity, vid);
+    gl.uniform1i(advectionProgram.uniforms.uSource, vid);
+    gl.uniform1f(advectionProgram.uniforms.dt, dt);
+    gl.uniform1f(advectionProgram.uniforms.dissipation, config.VELOCITY_DISSIPATION);
+    blit(velocity.write); velocity.swap();
+
+    if (!ext.supportLinearFiltering)
+      gl.uniform2f(advectionProgram.uniforms.dyeTexelSize, dye.texelSizeX, dye.texelSizeY);
+    gl.uniform1i(advectionProgram.uniforms.uVelocity, velocity.read.attach(0));
+    gl.uniform1i(advectionProgram.uniforms.uSource, dye.read.attach(1));
+    gl.uniform1f(advectionProgram.uniforms.dissipation, config.DENSITY_DISSIPATION);
+    blit(dye.write); dye.swap();
+  }
+  function drawDisplay() {
+    const w = gl.drawingBufferWidth, h = gl.drawingBufferHeight;
+    displayMaterial.bind();
+    if (config.SHADING)
+      gl.uniform2f(displayMaterial.uniforms.texelSize, 1.0/w, 1.0/h);
+    gl.uniform1i(displayMaterial.uniforms.uTexture, dye.read.attach(0));
+    blit(null);
+  }
+  function render() {
+    gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
+    gl.enable(gl.BLEND);
+    drawDisplay();
+  }
+  function resizeCanvas() {
+    const w = scaleByPixelRatio(window.innerWidth);
+    const h = scaleByPixelRatio(window.innerHeight);
+    if (canvas.width !== w || canvas.height !== h) {
+      canvas.width = w; canvas.height = h;
+      return true;
+    }
+    return false;
+  }
+
+  let lastUpdate = Date.now();
+  function calcDeltaTime() {
+    const now = Date.now();
+    let dt = (now - lastUpdate) / 1000;
+    dt = Math.min(dt, 0.016666);
+    lastUpdate = now;
+    return dt;
+  }
+  function frame() {
+    const dt = calcDeltaTime();
+    if (resizeCanvas()) initFramebuffers();
+    if (window.__paint.enabled) {
+      updateColors(dt);
+      applyInputs();
+      ambientDrift(dt);
+      step(dt);
+      render();
+    } else {
+      // Quickly dissipate dye when disabled
+      gl.disable(gl.BLEND);
+      gl.viewport(0, 0, dye.width, dye.height);
+      gl.bindFramebuffer(gl.FRAMEBUFFER, dye.write.fbo);
+      gl.clearColor(0,0,0,0); gl.clear(gl.COLOR_BUFFER_BIT);
+      dye.swap();
+      gl.viewport(0, 0, canvas.width, canvas.height);
+      gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+      gl.clearColor(0,0,0,0); gl.clear(gl.COLOR_BUFFER_BIT);
+    }
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+
+  // ---- Pointer handlers ----
+  function updatePointerDownData(p, id, x, y) {
+    p.id = id; p.down = true; p.moved = false;
+    p.texcoordX = x / canvas.width;
+    p.texcoordY = 1.0 - y / canvas.height;
+    p.prevTexcoordX = p.texcoordX; p.prevTexcoordY = p.texcoordY;
+    p.deltaX = 0; p.deltaY = 0;
+    p.color = generateColor();
+  }
+  function updatePointerMoveData(p, x, y, color) {
+    p.prevTexcoordX = p.texcoordX; p.prevTexcoordY = p.texcoordY;
+    p.texcoordX = x / canvas.width;
+    p.texcoordY = 1.0 - y / canvas.height;
+    p.deltaX = correctDeltaX(p.texcoordX - p.prevTexcoordX);
+    p.deltaY = correctDeltaY(p.texcoordY - p.prevTexcoordY);
+    p.moved = Math.abs(p.deltaX) > 0 || Math.abs(p.deltaY) > 0;
+    p.color = color;
+  }
+
+  window.addEventListener('mousedown', (e) => {
+    const p = pointers[0];
+    const x = scaleByPixelRatio(e.clientX), y = scaleByPixelRatio(e.clientY);
+    updatePointerDownData(p, -1, x, y);
+    clickSplat(p);
+  });
+  window.addEventListener('mousemove', (e) => {
+    const p = pointers[0];
+    const x = scaleByPixelRatio(e.clientX), y = scaleByPixelRatio(e.clientY);
+    updatePointerMoveData(p, x, y, p.color);
+  });
+  window.addEventListener('touchstart', (e) => {
+    const ts = e.targetTouches;
+    const p = pointers[0];
+    for (let i = 0; i < ts.length; i++) {
+      const x = scaleByPixelRatio(ts[i].clientX), y = scaleByPixelRatio(ts[i].clientY);
+      updatePointerDownData(p, ts[i].identifier, x, y);
+    }
+  }, { passive: true });
+  window.addEventListener('touchmove', (e) => {
+    const ts = e.targetTouches;
+    const p = pointers[0];
+    for (let i = 0; i < ts.length; i++) {
+      const x = scaleByPixelRatio(ts[i].clientX), y = scaleByPixelRatio(ts[i].clientY);
+      updatePointerMoveData(p, x, y, p.color);
+    }
+  }, { passive: true });
+
+  // Public update hook (used by tweaks)
+  window.__updatePaint = (patch) => Object.assign(window.__paint, patch);
+})();
+</script>
+
+</body>
+</html>
